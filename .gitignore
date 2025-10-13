@@ -7,3 +7,5 @@ val/
 dataset/
 utils/
 *.cache
+__pycache__/
+.env*
