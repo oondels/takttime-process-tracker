@@ -1,0 +1,9 @@
+.venv/
+labelImg/  
+node_modules/
+runs/
+train/
+val/
+dataset/
+utils/
+*.cache
