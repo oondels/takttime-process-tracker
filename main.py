@@ -8,6 +8,7 @@ import cv2
 import numpy as np
 import json
 import logging
+import time
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -55,6 +56,9 @@ def extract_takt_message(roi):
         .strip()
     )
 
+    if "00:00:00" in text:
+        # return {"takt_time": "0", "message": "Takt Liberado!"}
+        return 3
     # if "00:00:10" in text:
     #     return {"takt_time": "10", "message": "Takt: 10 segundos."}
     # elif "00:01:00" in text:
@@ -63,9 +67,6 @@ def extract_takt_message(roi):
     #     return {"takt_time": "30", "message": "Takt: 30 segundos."}
     # elif "00:00:05" in text:
     #     return {"takt_time": "5", "message": "Takt: 5 segundos."}
-    if "00:00:00" in text:
-        # return {"takt_time": "0", "message": "Takt Liberado!"}
-        return 1
 
 
 # TODO: Config RabbitMQ
@@ -111,8 +112,8 @@ async def main():
         model = YOLO(MODEL_PATH)
         logging.info("Modelo carregado com sucesso!")
 
+        last_message_time = None
         last_sent_message = None
-
         while True:
             try:
                 screen = ImageGrab.grab()
@@ -120,9 +121,8 @@ async def main():
                 frame = cv2.cvtColor(screen_np, cv2.COLOR_RGB2BGR)
 
                 # Fazer a predição no frame atual
-                results = model.predict(source=frame, stream=False, conf=0.15)
+                results = model.predict(source=frame, stream=False, conf=0.15, verbose=False)
 
-                current_message = None
                 extracted_text = None
                 for result in results:
                     for box in result.boxes.xyxy:
@@ -132,15 +132,16 @@ async def main():
 
                         processed_roi = preprocess_for_ocr(roi)
                         extracted_text = extract_takt_message(processed_roi)
-                        current_message = extracted_text
-                        # if extracted_text:
-                        #     break
 
-                if current_message:
-                    await send_message(channel, ROUTING_KEY, current_message)
-                # last_sent_message = current_message
-                # # send only when we have a new message different from last sent
-                # if current_message and current_message != last_sent_message:
+                if extracted_text:
+                    now = time.time()
+                    if last_sent_message is None or (time.time() - last_message_time > 5):
+                        # await send_message(channel, ROUTING_KEY, extracted_text)
+                        last_sent_message = extracted_text
+                        last_message_time = now
+                        print(f"\n\n Mensagem enviada: {extracted_text} \n\n")
+                    else:
+                        pass
 
                 await asyncio.sleep(0.5)
             except Exception as e:
