@@ -46,7 +46,7 @@ def preprocess_for_ocr(roi_bgr):
     return th
 
 
-def extract_takt_message(roi):
+def extract_takt_message(roi, takt_tracker_count: int = 0) -> Optional[dict]:
     tess_config = (
         r"--oem 3 "  # LSTM OCR engine
         r"-c tessedit_char_whitelist=0123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZ "
@@ -100,12 +100,17 @@ async def send_message(
             on_event("message_error", {"error": str(e)})
 
 
+def update_takt_count(current_count: int) -> int:
+    return current_count + 1
+
+
 async def main(on_event: Optional[Callable[[str, Any], None]] = None):
     logging.info(
         f"Iniciando Sistema de Detecção de Takt-Time para o dispositivo: {DEVICE_ID}"
     )
     logging.info(f"Conectadno ao RabbitMQ em {AMQP_URL}")
 
+    takt_tracker_count = 0
     try:
         connection = await aio_pika.connect_robust(AMQP_URL)
     except Exception as e:
@@ -157,9 +162,8 @@ async def main(on_event: Optional[Callable[[str, Any], None]] = None):
                         processed_roi = preprocess_for_ocr(roi)
                         extracted_text = extract_takt_message(processed_roi)
 
-                if extracted_text:
-                    if on_event:
-                        on_event("takt_detected", {"takt": extracted_text})
+                # Decta o fim da etapa de um takt
+                if extracted_text and on_event:
                     now = time.time()
                     if last_sent_message is None or (
                         time.time() - last_message_time > 5
@@ -167,7 +171,31 @@ async def main(on_event: Optional[Callable[[str, Any], None]] = None):
                         # await send_message(channel, ROUTING_KEY, extracted_text, on_event=on_event)
                         last_sent_message = extracted_text
                         last_message_time = now
-                        print(f"\n\n Mensagem enviada: {extracted_text} \n\n")
+
+                        # Atualiza o contador de detecções
+                        takt_tracker_count = update_takt_count(takt_tracker_count)
+                        match takt_tracker_count:
+                            case 1:
+                                print("\n")
+                                logging.info("Primeira detecção de Takt.")
+                                on_event("takt_detected", {"takt": takt_tracker_count, }) 
+                                return
+                            case 2:
+                                print("\n")
+                                logging.info("Segunda detecção de Takt.")
+                                on_event("takt_detected", {"takt": takt_tracker_count, }) 
+                                return
+                            case 3:
+                                print("\n")
+                                logging.info(
+                                    "Terceira detecção de Takt -> Talão completo, resetando contador."
+                                )
+                                on_event("takt_detected", {"takt": takt_tracker_count, }) 
+                                # reseta contador
+                                takt_tracker_count = 0
+                                return
+
+                        # print(f"\n\n Mensagem enviada: {extracted_text} \n\n")
                     else:
                         pass
 
