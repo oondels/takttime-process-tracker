@@ -9,7 +9,9 @@ import numpy as np
 import json
 import logging
 import time
+from typing import Callable, Any, Optional
 from dotenv import load_dotenv
+
 load_dotenv()
 
 logging.basicConfig(
@@ -17,7 +19,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-AMQP_URL = os.getenv("AMQP_URL", "amqp://siren:secret@127.0.0.1/")
+AMQP_URL = os.getenv("AMQP_URL", "amqp://dass:pHUWphISTl7r_Geis@10.110.21.162/")
 AMQP_EXCHANGE = "amq.topic"
 DEVICE_ID = os.getenv("DEVICE_ID", "cost-2-2408")
 ROUTING_KEY = f"takt.device.{DEVICE_ID}"
@@ -70,7 +72,12 @@ def extract_takt_message(roi):
 
 
 # TODO: Config RabbitMQ
-async def send_message(channel: aio_pika.Channel, routing_key: str, message_body: dict):
+async def send_message(
+    channel: aio_pika.Channel,
+    routing_key: str,
+    message_body: dict,
+    on_event: Optional[Callable[[str, Any], None]] = None,
+):
     """
     Publish a message to the RabbitMQ exchange.
     """
@@ -83,11 +90,17 @@ async def send_message(channel: aio_pika.Channel, routing_key: str, message_body
         exchange = await channel.get_exchange("amq.topic")
         await exchange.publish(message, routing_key=routing_key)
         logging.info(f"Mensagem enviada para '{routing_key}': {message_body}")
+
+        # Notifica a UI que a mensagem foi enviada
+        if on_event:
+            on_event("message_sent", message_body)
     except Exception as e:
         logging.error(f"Erro ao enviar mensagem para '{routing_key}': {e}")
+        if on_event:
+            on_event("message_error", {"error": str(e)})
 
 
-async def main():
+async def main(on_event: Optional[Callable[[str, Any], None]] = None):
     logging.info(
         f"Iniciando Sistema de Detecção de Takt-Time para o dispositivo: {DEVICE_ID}"
     )
@@ -99,18 +112,27 @@ async def main():
         logging.error(
             f"Não foi possível conectar ao RabbitMQ. Verifique o servidor: {e}"
         )
+        if on_event:
+            on_event("connection_error", {"error": str(e)})
         return
 
     async with connection:
         channel = await connection.channel()
         logging.info("Conectado ao RabbitMQ com sucesso!")
+        if on_event:
+            on_event("connected", {"amqp_url": AMQP_URL})
 
         logging.info("Carregando modelo YOLO...")
         if not os.path.exists(MODEL_PATH):
             logging.error(f"Modelo não encontrado em {MODEL_PATH}")
+            if on_event:
+                on_event("model_missing", {"path": MODEL_PATH})
             return
+
         model = YOLO(MODEL_PATH)
         logging.info("Modelo carregado com sucesso!")
+        if on_event:
+            on_event("model_loaded", {"model_path": MODEL_PATH})
 
         last_message_time = None
         last_sent_message = None
@@ -121,7 +143,9 @@ async def main():
                 frame = cv2.cvtColor(screen_np, cv2.COLOR_RGB2BGR)
 
                 # Fazer a predição no frame atual
-                results = model.predict(source=frame, stream=False, conf=0.15, verbose=False)
+                results = model.predict(
+                    source=frame, stream=False, conf=0.15, verbose=False
+                )
 
                 extracted_text = None
                 for result in results:
@@ -134,9 +158,13 @@ async def main():
                         extracted_text = extract_takt_message(processed_roi)
 
                 if extracted_text:
+                    if on_event:
+                        on_event("takt_detected", {"takt": extracted_text})
                     now = time.time()
-                    if last_sent_message is None or (time.time() - last_message_time > 5):
-                        # await send_message(channel, ROUTING_KEY, extracted_text)
+                    if last_sent_message is None or (
+                        time.time() - last_message_time > 5
+                    ):
+                        # await send_message(channel, ROUTING_KEY, extracted_text, on_event=on_event)
                         last_sent_message = extracted_text
                         last_message_time = now
                         print(f"\n\n Mensagem enviada: {extracted_text} \n\n")
@@ -146,6 +174,8 @@ async def main():
                 await asyncio.sleep(0.5)
             except Exception as e:
                 logging.error(f"Erro durante a execução: {e}")
+                if on_event:
+                    on_event("runtime_error", {"error": str(e)})
                 await asyncio.sleep(2)
 
 
