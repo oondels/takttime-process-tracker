@@ -46,7 +46,7 @@ def preprocess_for_ocr(roi_bgr):
     return th
 
 
-def extract_takt_message(roi, takt_tracker_count: int = 0) -> Optional[dict]:
+def extract_takt_message(roi) -> Optional[dict]:
     tess_config = (
         r"--oem 3 "  # LSTM OCR engine
         r"-c tessedit_char_whitelist=0123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZ "
@@ -59,19 +59,11 @@ def extract_takt_message(roi, takt_tracker_count: int = 0) -> Optional[dict]:
     )
 
     if "00:00:00" in text:
-        # return {"takt_time": "0", "message": "Takt Liberado!"}
-        return 3
-    # if "00:00:10" in text:
-    #     return {"takt_time": "10", "message": "Takt: 10 segundos."}
-    # elif "00:01:00" in text:
-    #     return {"takt_time": "60", "message": "Takt: 60 segundos."}
-    # elif "00:00:30" in text:
-    #     return {"takt_time": "30", "message": "Takt: 30 segundos."}
-    # elif "00:00:05" in text:
-    #     return {"takt_time": "5", "message": "Takt: 5 segundos."}
+        return {"event": "takt", "message": "Takt detectado"}
+    else:
+        return {"event": "takt_screen", "message": "Takt Aberto"}
 
 
-# TODO: Config RabbitMQ
 async def send_message(
     channel: aio_pika.Channel,
     routing_key: str,
@@ -108,7 +100,7 @@ async def main(on_event: Optional[Callable[[str, Any], None]] = None):
     logging.info(
         f"Iniciando Sistema de Detecção de Takt-Time para o dispositivo: {DEVICE_ID}"
     )
-    logging.info(f"Conectadno ao RabbitMQ em {AMQP_URL}")
+    logging.info(f"Conectando ao RabbitMQ em {AMQP_URL}")
 
     takt_tracker_count = 0
     try:
@@ -141,6 +133,7 @@ async def main(on_event: Optional[Callable[[str, Any], None]] = None):
 
         last_message_time = None
         last_sent_message = None
+        last_takt_screen_check = None
         while True:
             try:
                 screen = ImageGrab.grab()
@@ -165,39 +158,68 @@ async def main(on_event: Optional[Callable[[str, Any], None]] = None):
                 # Decta o fim da etapa de um takt
                 if extracted_text and on_event:
                     now = time.time()
+
+                    # Trata reconhecimento de tela da takt aberto (sem reconhecer fim de takt) - Faz check a cada 5 segundos
+                    if isinstance(extracted_text, dict) and extracted_text.get('event') == "takt_screen":
+                        if (
+                            last_takt_screen_check is None
+                            or (now - last_takt_screen_check) > 5
+                        ):
+                            # Notifica a UI que a tela de takt está aberta
+                            on_event(
+                                "takt_screen_detected", {"message": extracted_text.get('message')}
+                            )
+                            last_takt_screen_check = now
+                        await asyncio.sleep(0.5)
+                        continue
+                    
                     if last_sent_message is None or (
-                        time.time() - last_message_time > 5
+                        time.time() - last_message_time > 2
                     ):
-                        # await send_message(channel, ROUTING_KEY, extracted_text, on_event=on_event)
                         last_sent_message = extracted_text
                         last_message_time = now
 
                         # Atualiza o contador de detecções
                         takt_tracker_count = update_takt_count(takt_tracker_count)
+                        
                         match takt_tracker_count:
                             case 1:
                                 print("\n")
                                 logging.info("Primeira detecção de Takt.")
-                                on_event("takt_detected", {"takt": takt_tracker_count, }) 
-                                return
+                                on_event(
+                                    "takt_detected",
+                                    {
+                                        "takt": takt_tracker_count,
+                                    },
+                                )
+                                
                             case 2:
                                 print("\n")
                                 logging.info("Segunda detecção de Takt.")
-                                on_event("takt_detected", {"takt": takt_tracker_count, }) 
-                                return
+                                on_event(
+                                    "takt_detected",
+                                    {
+                                        "takt": takt_tracker_count,
+                                    },
+                                )
                             case 3:
                                 print("\n")
                                 logging.info(
                                     "Terceira detecção de Takt -> Talão completo, resetando contador."
                                 )
-                                on_event("takt_detected", {"takt": takt_tracker_count, }) 
+                                on_event(
+                                    "takt_detected",
+                                    {
+                                        "takt": takt_tracker_count,
+                                    },
+                                )
                                 # reseta contador
                                 takt_tracker_count = 0
-                                return
-
-                        # print(f"\n\n Mensagem enviada: {extracted_text} \n\n")
+                            
+                        # Envia a mensagem para o RabbitMQ
+                        await send_message(channel, ROUTING_KEY, extracted_text)
                     else:
-                        pass
+                        continue
 
                 await asyncio.sleep(0.5)
             except Exception as e:

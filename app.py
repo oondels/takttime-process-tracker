@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 from PyQt5.QtWidgets import (
     QApplication,
@@ -10,9 +11,10 @@ from PyQt5.QtWidgets import (
     QPushButton,
     QMessageBox,
 )
-from PyQt5.QtCore import Qt, QThread, QLibraryInfo, pyqtSignal
+from PyQt5.QtCore import Qt, QThread, QLibraryInfo, pyqtSignal, QTimer
 import asyncio
 import importlib
+import time
 
 
 CONFIG_DIR = os.path.join(os.path.dirname(__file__), "config")
@@ -47,8 +49,19 @@ class MainWindow(QWidget):
         self._analysis_running = False
         self._worker_thread = None
 
+        # Estado da tela Takt e timeout
+        self.takt_screen_working = False
+        self.last_takt_screen_check = None
+        self.takt_timeout_sec = 6
+
         self._build_ui()
         self._load()
+
+        # Timer para verificar periodicamente o status
+        self._takt_timer = QTimer(self)
+        self._takt_timer.setInterval(1000)  # checa a cada 1s
+        self._takt_timer.timeout.connect(self._check_takt_screen_status)
+        self._takt_timer.start()
 
     def _build_ui(self):
         layout = QVBoxLayout()
@@ -92,9 +105,11 @@ class MainWindow(QWidget):
 
         # Status TAKT
         takt_layout = QHBoxLayout()
-        takt_layout.addWidget(QLabel("Etapa Takt:"))
+        takt_label_title = QLabel("Etapa Takt:")
         self.status_takt = QLabel("...")
         self.status_takt.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+
+        takt_layout.addWidget(takt_label_title)
         takt_layout.addWidget(self.status_takt)
         layout.addLayout(takt_layout)
 
@@ -182,9 +197,41 @@ class MainWindow(QWidget):
                 self._worker_thread.wait(5000)  # aguarda até 5s
 
     def on_worker_status_update(self, data: dict):
-        print(f"Status update from worker: {type(data)} - {data}")
-        self.status_takt.setText(str(data.get("takt", "...")))
+        if data.get("event") == "takt_screen_detected":
+            self.takt_screen_working = True
+            self.status_label.setText("Analisando")
+            self.last_takt_screen_check = time.monotonic()
+        elif data.get("event") == "takt_detected":
+            self.takt_screen_working = True
+            self.status_label.setText("Analisando")
+            self.last_takt_screen_check = time.monotonic()
+            # Atualiza o status da label takt (UI)
+            self.status_takt.setText(str(data.get("takt", "0")))
 
+            # Reseta o contador após chegar na etapa 3 com um timer de 3 segundos
+            if data.get("takt") == 3:
+                if not hasattr(self, "_takt_reset_timer"):
+                    self._takt_reset_timer = QTimer(self)
+                    self._takt_reset_timer.setSingleShot(True)
+                    self._takt_reset_timer.timeout.connect(lambda: self.status_takt.setText("0"))
+                # Reinicia o timer para 3 segundos
+                self._takt_reset_timer.start(3000)
+                
+        # logging.info(f"Worker event: {data.get('event')} - {data}")
+
+    def _check_takt_screen_status(self):
+        # Desativa se passou do limite
+        if self.takt_screen_working and self.last_takt_screen_check is not None:
+            if (time.monotonic() - self.last_takt_screen_check) > self.takt_timeout_sec:
+                # Continuar daqui
+                # TODO: Enviar mensagem a rabbitmq para acionar alarme de takt offline
+                print("Tempo máximo de Tela Takt offline alcançado!")
+                self.takt_screen_working = False
+                self._analysis_running = False
+                self.status_label.setText("Takt Fechado!")
+                self.status_takt.setText("...")
+
+                
     def closeEvent(self, event):
         # Garantir que worker é finalizado ao fechar janela
         try:
