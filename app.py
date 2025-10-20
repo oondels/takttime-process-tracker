@@ -53,6 +53,7 @@ class MainWindow(QWidget):
         self.takt_screen_working = False
         self.last_takt_screen_check = None
         self.takt_timeout_sec = 6
+        self.last_takt_time_count = 0
 
         self._build_ui()
         self._load()
@@ -134,10 +135,13 @@ class MainWindow(QWidget):
         currently_readonly = self.cell_input.isReadOnly()
         if currently_readonly:
             # Habilita edição
+            self.start_stop_btn.setDisabled(True)  # desabilita enquanto edita
             self.set_inputs_enabled(True)
             self.configure_btn.setText("Salvar Configuração")
         else:
             # Salva e desabilita edição
+            self.start_stop_btn.setDisabled(False)  # reabilita
+
             data = {
                 "cell_number": self.cell_input.text().strip(),
                 "factory": self.factory_input.text().strip(),
@@ -201,22 +205,27 @@ class MainWindow(QWidget):
             self.takt_screen_working = True
             self.status_label.setText("Analisando")
             self.last_takt_screen_check = time.monotonic()
+            self.status_takt.setText(str(self.last_takt_time_count))
+
         elif data.get("event") == "takt_detected":
             self.takt_screen_working = True
             self.status_label.setText("Analisando")
             self.last_takt_screen_check = time.monotonic()
             # Atualiza o status da label takt (UI)
-            self.status_takt.setText(str(data.get("takt", "0")))
+            self.last_takt_time_count = data.get("takt", self.last_takt_time_count)
+            self.status_takt.setText(str(self.last_takt_time_count))
 
             # Reseta o contador após chegar na etapa 3 com um timer de 3 segundos
-            if data.get("takt") == 3:
+            if self.last_takt_time_count == 3:
                 if not hasattr(self, "_takt_reset_timer"):
                     self._takt_reset_timer = QTimer(self)
                     self._takt_reset_timer.setSingleShot(True)
-                    self._takt_reset_timer.timeout.connect(lambda: self.status_takt.setText("0"))
+                    self._takt_reset_timer.timeout.connect(
+                        lambda: self.status_takt.setText("0")
+                    )
                 # Reinicia o timer para 3 segundos
                 self._takt_reset_timer.start(3000)
-                
+
         # logging.info(f"Worker event: {data.get('event')} - {data}")
 
     def _check_takt_screen_status(self):
@@ -231,7 +240,6 @@ class MainWindow(QWidget):
                 self.status_label.setText("Takt Fechado!")
                 self.status_takt.setText("...")
 
-                
     def closeEvent(self, event):
         # Garantir que worker é finalizado ao fechar janela
         try:
