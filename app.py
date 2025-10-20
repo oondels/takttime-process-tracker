@@ -181,8 +181,9 @@ class MainWindow(QWidget):
                 self._worker_thread.stop()
                 self._worker_thread.wait(5000)  # aguarda até 5s
 
-    def on_worker_status_update(self, text: str):
-        self.status_takt.setText(str(text))
+    def on_worker_status_update(self, data: dict):
+        print(f"Status update from worker: {type(data)} - {data}")
+        self.status_takt.setText(str(data.get("takt", "...")))
 
     def closeEvent(self, event):
         # Garantir que worker é finalizado ao fechar janela
@@ -197,7 +198,7 @@ class MainWindow(QWidget):
 class AsyncWorker(QThread):
     """Runs the async tracker_main in a dedicated event loop/thread."""
 
-    status_update = pyqtSignal(str)
+    status_update = pyqtSignal(dict)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -219,8 +220,8 @@ class AsyncWorker(QThread):
                 tracker_main = importlib.import_module("main").main
 
                 # Callback chamado pelo main
-                def on_event(event_name: str, payload):
-                    self.status_update.emit(f"{event_name}: {payload}")
+                def on_event(event_name: str, payload: dict):
+                    self.status_update.emit({"event": event_name, **payload})
 
                 # Start tracker in parallel with a stop waiter
                 tracker = self._loop.create_task(tracker_main(on_event=on_event))
