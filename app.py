@@ -809,13 +809,16 @@ class MainWindow(QWidget):
                 if not hasattr(self, "_takt_reset_timer"):
                     self._takt_reset_timer = QTimer(self)
                     self._takt_reset_timer.setSingleShot(True)
-                    self._takt_reset_timer.timeout.connect(
-                        lambda: self.status_takt.setText("0")
-                    )
+                    self._takt_reset_timer.timeout.connect(self._reset_takt_counter)
                 # Reinicia o timer para 3 segundos
                 self._takt_reset_timer.start(3000)
 
         # logging.info(f"Worker event: {data.get('event')} - {data}")
+    
+    def _reset_takt_counter(self):
+        """Reseta o contador de takt tanto na UI quanto na variável interna"""
+        self.last_takt_time_count = 0
+        self.status_takt.setText("0")
 
     def _check_takt_screen_status(self):
         # Desativa se passou do limite
