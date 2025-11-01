@@ -33,12 +33,32 @@ def ensure_config_dir():
 def load_config():
     ensure_config_dir()
     if not os.path.exists(CONFIG_PATH):
-        return {"cell_number": "", "factory": "", "cell_leader": ""}
+        return {
+            "device": {"cell_number": "", "factory": "", "cell_leader": ""},
+            "network": {"wifi_ssid": "", "wifi_pass": ""},
+            "tech": {"amqp_host": "", "amqp_user": "", "amqp_pass": "", "model_path": "./train_2025.pt"}
+        }
     try:
         with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-            return json.load(f)
+            config = json.load(f)
+            # Migração de configuração antiga para nova estrutura
+            if "cell_number" in config:
+                return {
+                    "device": {
+                        "cell_number": config.get("cell_number", ""),
+                        "factory": config.get("factory", ""),
+                        "cell_leader": config.get("cell_leader", "")
+                    },
+                    "network": {"wifi_ssid": "", "wifi_pass": ""},
+                    "tech": {"amqp_host": "", "amqp_user": "", "amqp_pass": "", "model_path": "./train_2025.pt"}
+                }
+            return config
     except Exception:
-        return {"cell_number": "", "factory": "", "cell_leader": ""}
+        return {
+            "device": {"cell_number": "", "factory": "", "cell_leader": ""},
+            "network": {"wifi_ssid": "", "wifi_pass": ""},
+            "tech": {"amqp_host": "", "amqp_user": "", "amqp_pass": "", "model_path": "./train_2025.pt"}
+        }
 
 
 def save_config(data: dict):
@@ -54,7 +74,8 @@ class ConfigDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Configurações do Sistema")
         self.setModal(True)
-        self.setMinimumWidth(500)
+        self.setMinimumWidth(600)
+        self.setMinimumHeight(650)
         self._build_ui()
         self._load_current_config()
 
@@ -71,20 +92,18 @@ class ConfigDialog(QDialog):
         main_layout.addWidget(title)
 
         description = QLabel(
-            "Configure os parâmetros da célula de produção para iniciar o monitoramento."
+            "Configure os parâmetros do dispositivo, rede e conexões técnicas."
         )
         description.setWordWrap(True)
         description.setStyleSheet("color: #666; padding: 10px;")
         description.setAlignment(Qt.AlignCenter)
         main_layout.addWidget(description)
 
-        # Group Box para informações da célula
-        cell_group = QGroupBox("Informações da Célula")
-        cell_group.setStyleSheet(
-            """
+        # Estilo comum para GroupBox
+        group_style = """
             QGroupBox {
                 font-weight: bold;
-                border: 2px solid #ccc;
+                border: 2px solid #3498db;
                 border-radius: 5px;
                 margin-top: 10px;
                 padding-top: 10px;
@@ -93,46 +112,110 @@ class ConfigDialog(QDialog):
                 subcontrol-origin: margin;
                 left: 10px;
                 padding: 0 5px;
+                color: #2980b9;
             }
         """
-        )
+        
+        input_style = "padding: 8px; border: 1px solid #ccc; border-radius: 3px;"
+        label_style = "font-weight: normal;"
 
-        form_layout = QFormLayout()
-        form_layout.setSpacing(15)
-        form_layout.setContentsMargins(20, 20, 20, 20)
+        # ===== DISPOSITIVO =====
+        device_group = QGroupBox("🖥️ Dispositivo")
+        device_group.setStyleSheet(group_style)
+        
+        device_layout = QFormLayout()
+        device_layout.setSpacing(12)
+        device_layout.setContentsMargins(20, 20, 20, 20)
 
-        # Campo Número da Célula
         self.cell_input = QLineEdit()
         self.cell_input.setPlaceholderText("Ex: Célula 01")
-        self.cell_input.setStyleSheet(
-            "padding: 8px; border: 1px solid #ccc; border-radius: 3px;"
-        )
+        self.cell_input.setStyleSheet(input_style)
         cell_label = QLabel("Número da Célula:")
-        cell_label.setStyleSheet("font-weight: normal;")
-        form_layout.addRow(cell_label, self.cell_input)
+        cell_label.setStyleSheet(label_style)
+        device_layout.addRow(cell_label, self.cell_input)
 
-        # Campo Fábrica
         self.factory_input = QLineEdit()
         self.factory_input.setPlaceholderText("Ex: Fábrica Principal")
-        self.factory_input.setStyleSheet(
-            "padding: 8px; border: 1px solid #ccc; border-radius: 3px;"
-        )
+        self.factory_input.setStyleSheet(input_style)
         factory_label = QLabel("Fábrica:")
-        factory_label.setStyleSheet("font-weight: normal;")
-        form_layout.addRow(factory_label, self.factory_input)
+        factory_label.setStyleSheet(label_style)
+        device_layout.addRow(factory_label, self.factory_input)
 
-        # Campo Líder da Célula
         self.leader_input = QLineEdit()
         self.leader_input.setPlaceholderText("Ex: João Silva")
-        self.leader_input.setStyleSheet(
-            "padding: 8px; border: 1px solid #ccc; border-radius: 3px;"
-        )
+        self.leader_input.setStyleSheet(input_style)
         leader_label = QLabel("Líder da Célula:")
-        leader_label.setStyleSheet("font-weight: normal;")
-        form_layout.addRow(leader_label, self.leader_input)
+        leader_label.setStyleSheet(label_style)
+        device_layout.addRow(leader_label, self.leader_input)
 
-        cell_group.setLayout(form_layout)
-        main_layout.addWidget(cell_group)
+        device_group.setLayout(device_layout)
+        main_layout.addWidget(device_group)
+
+        # ===== REDE =====
+        network_group = QGroupBox("📡 Rede")
+        network_group.setStyleSheet(group_style)
+        
+        network_layout = QFormLayout()
+        network_layout.setSpacing(12)
+        network_layout.setContentsMargins(20, 20, 20, 20)
+
+        self.wifi_ssid_input = QLineEdit()
+        self.wifi_ssid_input.setPlaceholderText("Ex: RedeWiFi-Producao")
+        self.wifi_ssid_input.setStyleSheet(input_style)
+        ssid_label = QLabel("SSID WiFi:")
+        ssid_label.setStyleSheet(label_style)
+        network_layout.addRow(ssid_label, self.wifi_ssid_input)
+
+        self.wifi_pass_input = QLineEdit()
+        self.wifi_pass_input.setPlaceholderText("Senha do WiFi")
+        self.wifi_pass_input.setEchoMode(QLineEdit.Password)
+        self.wifi_pass_input.setStyleSheet(input_style)
+        pass_label = QLabel("Senha WiFi:")
+        pass_label.setStyleSheet(label_style)
+        network_layout.addRow(pass_label, self.wifi_pass_input)
+
+        network_group.setLayout(network_layout)
+        main_layout.addWidget(network_group)
+
+        # ===== TÉCNICO =====
+        tech_group = QGroupBox("🔧 Configurações Técnicas")
+        tech_group.setStyleSheet(group_style)
+        
+        tech_layout = QFormLayout()
+        tech_layout.setSpacing(12)
+        tech_layout.setContentsMargins(20, 20, 20, 20)
+
+        self.amqp_host_input = QLineEdit()
+        self.amqp_host_input.setPlaceholderText("Ex: amqp://user:pass@host:port/")
+        self.amqp_host_input.setStyleSheet(input_style)
+        amqp_host_label = QLabel("AMQP Host:")
+        amqp_host_label.setStyleSheet(label_style)
+        tech_layout.addRow(amqp_host_label, self.amqp_host_input)
+
+        self.amqp_user_input = QLineEdit()
+        self.amqp_user_input.setPlaceholderText("Usuário RabbitMQ")
+        self.amqp_user_input.setStyleSheet(input_style)
+        amqp_user_label = QLabel("AMQP Usuário:")
+        amqp_user_label.setStyleSheet(label_style)
+        tech_layout.addRow(amqp_user_label, self.amqp_user_input)
+
+        self.amqp_pass_input = QLineEdit()
+        self.amqp_pass_input.setPlaceholderText("Senha RabbitMQ")
+        self.amqp_pass_input.setEchoMode(QLineEdit.Password)
+        self.amqp_pass_input.setStyleSheet(input_style)
+        amqp_pass_label = QLabel("AMQP Senha:")
+        amqp_pass_label.setStyleSheet(label_style)
+        tech_layout.addRow(amqp_pass_label, self.amqp_pass_input)
+
+        self.model_path_input = QLineEdit()
+        self.model_path_input.setPlaceholderText("./train_2025.pt")
+        self.model_path_input.setStyleSheet(input_style)
+        model_label = QLabel("Caminho do Modelo:")
+        model_label.setStyleSheet(label_style)
+        tech_layout.addRow(model_label, self.model_path_input)
+
+        tech_group.setLayout(tech_layout)
+        main_layout.addWidget(tech_group)
 
         # Botões de ação
         button_box = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
@@ -181,27 +264,69 @@ class ConfigDialog(QDialog):
     def _load_current_config(self):
         """Carrega a configuração atual nos campos"""
         cfg = load_config()
-        self.cell_input.setText(cfg.get("cell_number", ""))
-        self.factory_input.setText(cfg.get("factory", ""))
-        self.leader_input.setText(cfg.get("cell_leader", ""))
+        
+        # Dispositivo
+        device = cfg.get("device", {})
+        self.cell_input.setText(device.get("cell_number", ""))
+        self.factory_input.setText(device.get("factory", ""))
+        self.leader_input.setText(device.get("cell_leader", ""))
+        
+        # Rede
+        network = cfg.get("network", {})
+        self.wifi_ssid_input.setText(network.get("wifi_ssid", ""))
+        self.wifi_pass_input.setText(network.get("wifi_pass", ""))
+        
+        # Técnico
+        tech = cfg.get("tech", {})
+        self.amqp_host_input.setText(tech.get("amqp_host", ""))
+        self.amqp_user_input.setText(tech.get("amqp_user", ""))
+        self.amqp_pass_input.setText(tech.get("amqp_pass", ""))
+        self.model_path_input.setText(tech.get("model_path", "./train_2025.pt"))
 
     def on_save(self):
         """Valida e salva a configuração"""
+        # Dispositivo
         cell = self.cell_input.text().strip()
         factory = self.factory_input.text().strip()
         leader = self.leader_input.text().strip()
+        
+        # Rede
+        wifi_ssid = self.wifi_ssid_input.text().strip()
+        wifi_pass = self.wifi_pass_input.text().strip()
+        
+        # Técnico
+        amqp_host = self.amqp_host_input.text().strip()
+        amqp_user = self.amqp_user_input.text().strip()
+        amqp_pass = self.amqp_pass_input.text().strip()
+        model_path = self.model_path_input.text().strip() or "./train_2025.pt"
 
-        # Validação básica
+        # Validação básica - apenas campos do dispositivo são obrigatórios
         if not cell or not factory or not leader:
             QMessageBox.warning(
                 self,
                 "Campos Obrigatórios",
-                "Por favor, preencha todos os campos antes de salvar.",
+                "Por favor, preencha todos os campos do Dispositivo antes de salvar.",
             )
             return
 
-        # Salvar configuração
-        data = {"cell_number": cell, "factory": factory, "cell_leader": leader}
+        # Salvar configuração estruturada
+        data = {
+            "device": {
+                "cell_number": cell,
+                "factory": factory,
+                "cell_leader": leader
+            },
+            "network": {
+                "wifi_ssid": wifi_ssid,
+                "wifi_pass": wifi_pass
+            },
+            "tech": {
+                "amqp_host": amqp_host,
+                "amqp_user": amqp_user,
+                "amqp_pass": amqp_pass,
+                "model_path": model_path
+            }
+        }
 
         try:
             save_config(data)
@@ -217,9 +342,21 @@ class ConfigDialog(QDialog):
     def get_config(self):
         """Retorna a configuração atual dos campos"""
         return {
-            "cell_number": self.cell_input.text().strip(),
-            "factory": self.factory_input.text().strip(),
-            "cell_leader": self.leader_input.text().strip(),
+            "device": {
+                "cell_number": self.cell_input.text().strip(),
+                "factory": self.factory_input.text().strip(),
+                "cell_leader": self.leader_input.text().strip()
+            },
+            "network": {
+                "wifi_ssid": self.wifi_ssid_input.text().strip(),
+                "wifi_pass": self.wifi_pass_input.text().strip()
+            },
+            "tech": {
+                "amqp_host": self.amqp_host_input.text().strip(),
+                "amqp_user": self.amqp_user_input.text().strip(),
+                "amqp_pass": self.amqp_pass_input.text().strip(),
+                "model_path": self.model_path_input.text().strip() or "./train_2025.pt"
+            }
         }
 
 
@@ -443,9 +580,10 @@ class MainWindow(QWidget):
     def _load(self):
         """Carrega e exibe a configuração atual"""
         cfg = load_config()
-        self.cell_display.setText(cfg.get("cell_number", "--"))
-        self.factory_display.setText(cfg.get("factory", "--"))
-        self.leader_display.setText(cfg.get("cell_leader", "--"))
+        device = cfg.get("device", {})
+        self.cell_display.setText(device.get("cell_number", "--"))
+        self.factory_display.setText(device.get("factory", "--"))
+        self.leader_display.setText(device.get("cell_leader", "--"))
 
     def on_configure(self):
         """Abre o diálogo de configuração"""
@@ -459,13 +597,14 @@ class MainWindow(QWidget):
         if not self._analysis_running:
             # Start analysis: check that config exists
             cfg = load_config()
+            device = cfg.get("device", {})
             if not (
-                cfg.get("cell_number") and cfg.get("factory") and cfg.get("cell_leader")
+                device.get("cell_number") and device.get("factory") and device.get("cell_leader")
             ):
                 reply = QMessageBox.question(
                     self,
                     "Configuração incompleta",
-                    "A configuração está incompleta. Deseja editar agora?",
+                    "A configuração do dispositivo está incompleta. Deseja editar agora?",
                     QMessageBox.Yes | QMessageBox.No,
                 )
                 if reply == QMessageBox.Yes:

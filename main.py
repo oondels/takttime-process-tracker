@@ -19,13 +19,42 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-AMQP_URL = os.getenv("AMQP_URL", "amqp://dass:pHUWphISTl7r_Geis@10.110.21.162/")
+# Carregar configuração do arquivo config.json
+CONFIG_DIR = os.path.join(os.path.dirname(__file__), "config")
+CONFIG_PATH = os.path.join(CONFIG_DIR, "config.json")
+
+def load_config():
+    """Carrega configuração do arquivo JSON"""
+    if not os.path.exists(CONFIG_PATH):
+        return {
+            "device": {"cell_number": "", "factory": "", "cell_leader": ""},
+            "network": {"wifi_ssid": "", "wifi_pass": ""},
+            "tech": {"amqp_host": "", "amqp_user": "", "amqp_pass": "", "model_path": "./train_2025.pt"}
+        }
+    try:
+        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        logger.error(f"Erro ao carregar configuração: {e}")
+        return {
+            "device": {"cell_number": "", "factory": "", "cell_leader": ""},
+            "network": {"wifi_ssid": "", "wifi_pass": ""},
+            "tech": {"amqp_host": "", "amqp_user": "", "amqp_pass": "", "model_path": "./train_2025.pt"}
+        }
+
+# Carregar configuração
+config = load_config()
+tech_config = config.get("tech", {})
+device_config = config.get("device", {})
+
+# Configurações AMQP - prioriza config.json, depois .env, depois valores padrão
+AMQP_URL = tech_config.get("amqp_host") or os.getenv("AMQP_URL", "amqp://dass:pHUWphISTl7r_Geis@10.110.21.3/")
 AMQP_EXCHANGE = "amq.topic"
-DEVICE_ID = os.getenv("DEVICE_ID", "cost-2-2408")
+DEVICE_ID = device_config.get("cell_number") or os.getenv("DEVICE_ID", "cost-2-2408")
 ROUTING_KEY = f"takt.device.{DEVICE_ID}"
 
 pytesseract.pytesseract.tesseract_cmd = r"/usr/bin/tesseract"
-MODEL_PATH = "./train_2025.pt"
+MODEL_PATH = tech_config.get("model_path") or "./train_2025.pt"
 
 
 def extract_roi(frame, box, pad=5, scale=2):
