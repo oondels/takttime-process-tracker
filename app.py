@@ -10,8 +10,13 @@ from PyQt5.QtWidgets import (
     QLineEdit,
     QPushButton,
     QMessageBox,
+    QDialog,
+    QGroupBox,
+    QFormLayout,
+    QDialogButtonBox,
 )
 from PyQt5.QtCore import Qt, QThread, QLibraryInfo, pyqtSignal, QTimer
+from PyQt5.QtGui import QFont, QIcon
 import asyncio
 import importlib
 import time
@@ -42,6 +47,182 @@ def save_config(data: dict):
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 
+class ConfigDialog(QDialog):
+    """Janela de diálogo dedicada para configurações"""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Configurações do Sistema")
+        self.setModal(True)
+        self.setMinimumWidth(500)
+        self._build_ui()
+        self._load_current_config()
+
+    def _build_ui(self):
+        main_layout = QVBoxLayout()
+
+        # Título e descrição
+        title = QLabel("Configurações do Rastreador de Takt-Time")
+        title_font = QFont()
+        title_font.setPointSize(14)
+        title_font.setBold(True)
+        title.setFont(title_font)
+        title.setAlignment(Qt.AlignCenter)
+        main_layout.addWidget(title)
+
+        description = QLabel(
+            "Configure os parâmetros da célula de produção para iniciar o monitoramento."
+        )
+        description.setWordWrap(True)
+        description.setStyleSheet("color: #666; padding: 10px;")
+        description.setAlignment(Qt.AlignCenter)
+        main_layout.addWidget(description)
+
+        # Group Box para informações da célula
+        cell_group = QGroupBox("Informações da Célula")
+        cell_group.setStyleSheet(
+            """
+            QGroupBox {
+                font-weight: bold;
+                border: 2px solid #ccc;
+                border-radius: 5px;
+                margin-top: 10px;
+                padding-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px;
+            }
+        """
+        )
+
+        form_layout = QFormLayout()
+        form_layout.setSpacing(15)
+        form_layout.setContentsMargins(20, 20, 20, 20)
+
+        # Campo Número da Célula
+        self.cell_input = QLineEdit()
+        self.cell_input.setPlaceholderText("Ex: Célula 01")
+        self.cell_input.setStyleSheet(
+            "padding: 8px; border: 1px solid #ccc; border-radius: 3px;"
+        )
+        cell_label = QLabel("Número da Célula:")
+        cell_label.setStyleSheet("font-weight: normal;")
+        form_layout.addRow(cell_label, self.cell_input)
+
+        # Campo Fábrica
+        self.factory_input = QLineEdit()
+        self.factory_input.setPlaceholderText("Ex: Fábrica Principal")
+        self.factory_input.setStyleSheet(
+            "padding: 8px; border: 1px solid #ccc; border-radius: 3px;"
+        )
+        factory_label = QLabel("Fábrica:")
+        factory_label.setStyleSheet("font-weight: normal;")
+        form_layout.addRow(factory_label, self.factory_input)
+
+        # Campo Líder da Célula
+        self.leader_input = QLineEdit()
+        self.leader_input.setPlaceholderText("Ex: João Silva")
+        self.leader_input.setStyleSheet(
+            "padding: 8px; border: 1px solid #ccc; border-radius: 3px;"
+        )
+        leader_label = QLabel("Líder da Célula:")
+        leader_label.setStyleSheet("font-weight: normal;")
+        form_layout.addRow(leader_label, self.leader_input)
+
+        cell_group.setLayout(form_layout)
+        main_layout.addWidget(cell_group)
+
+        # Botões de ação
+        button_box = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
+        button_box.button(QDialogButtonBox.Save).setText("Salvar")
+        button_box.button(QDialogButtonBox.Cancel).setText("Cancelar")
+
+        # Estilizar botões
+        button_box.button(QDialogButtonBox.Save).setStyleSheet(
+            """
+            QPushButton {
+                background-color: #4CAF50;
+                color: white;
+                padding: 10px 20px;
+                border: none;
+                border-radius: 4px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #45a049;
+            }
+        """
+        )
+        button_box.button(QDialogButtonBox.Cancel).setStyleSheet(
+            """
+            QPushButton {
+                background-color: #f44336;
+                color: white;
+                padding: 10px 20px;
+                border: none;
+                border-radius: 4px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #da190b;
+            }
+        """
+        )
+
+        button_box.accepted.connect(self.on_save)
+        button_box.rejected.connect(self.reject)
+
+        main_layout.addWidget(button_box)
+
+        self.setLayout(main_layout)
+
+    def _load_current_config(self):
+        """Carrega a configuração atual nos campos"""
+        cfg = load_config()
+        self.cell_input.setText(cfg.get("cell_number", ""))
+        self.factory_input.setText(cfg.get("factory", ""))
+        self.leader_input.setText(cfg.get("cell_leader", ""))
+
+    def on_save(self):
+        """Valida e salva a configuração"""
+        cell = self.cell_input.text().strip()
+        factory = self.factory_input.text().strip()
+        leader = self.leader_input.text().strip()
+
+        # Validação básica
+        if not cell or not factory or not leader:
+            QMessageBox.warning(
+                self,
+                "Campos Obrigatórios",
+                "Por favor, preencha todos os campos antes de salvar.",
+            )
+            return
+
+        # Salvar configuração
+        data = {"cell_number": cell, "factory": factory, "cell_leader": leader}
+
+        try:
+            save_config(data)
+            QMessageBox.information(
+                self,
+                "Sucesso",
+                "Configuração salva com sucesso!\n\nVocê já pode iniciar a análise.",
+            )
+            self.accept()
+        except Exception as e:
+            QMessageBox.critical(self, "Erro", f"Falha ao salvar configuração:\n{e}")
+
+    def get_config(self):
+        """Retorna a configuração atual dos campos"""
+        return {
+            "cell_number": self.cell_input.text().strip(),
+            "factory": self.factory_input.text().strip(),
+            "cell_leader": self.leader_input.text().strip(),
+        }
+
+
 class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
@@ -67,95 +248,211 @@ class MainWindow(QWidget):
     def _build_ui(self):
         layout = QVBoxLayout()
 
-        # Configuração de inputs
-        form_layout = QVBoxLayout()
+        # Cabeçalho estilizado
+        header_layout = QVBoxLayout()
+        title = QLabel("Takt-Time Process Tracker")
+        title_font = QFont()
+        title_font.setPointSize(16)
+        title_font.setBold(True)
+        title.setFont(title_font)
+        title.setAlignment(Qt.AlignCenter)
+        title.setStyleSheet("color: #2c3e50; padding: 15px;")
+        header_layout.addWidget(title)
 
-        self.cell_input = QLineEdit()
-        self.factory_input = QLineEdit()
-        self.leader_input = QLineEdit()
+        subtitle = QLabel("Monitoramento Inteligente de Linha de Produção")
+        subtitle.setAlignment(Qt.AlignCenter)
+        subtitle.setStyleSheet("color: #7f8c8d; padding-bottom: 15px; font-size: 11pt;")
+        header_layout.addWidget(subtitle)
 
-        form_layout.addWidget(QLabel("Número da célula:"))
-        form_layout.addWidget(self.cell_input)
-        form_layout.addWidget(QLabel("Fábrica:"))
-        form_layout.addWidget(self.factory_input)
-        form_layout.addWidget(QLabel("Líder da célula:"))
-        form_layout.addWidget(self.leader_input)
+        layout.addLayout(header_layout)
 
-        layout.addLayout(form_layout)
+        # Seção de Informações da Configuração
+        config_group = QGroupBox("Configuração Atual")
+        config_group.setStyleSheet(
+            """
+            QGroupBox {
+                font-weight: bold;
+                border: 2px solid #3498db;
+                border-radius: 8px;
+                margin-top: 10px;
+                padding-top: 15px;
+                background-color: #ecf0f1;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 15px;
+                padding: 0 8px;
+                color: #2980b9;
+            }
+        """
+        )
+
+        config_layout = QFormLayout()
+        config_layout.setSpacing(10)
+        config_layout.setContentsMargins(20, 20, 20, 20)
+
+        # Labels somente leitura para exibir configuração
+        self.cell_display = QLabel("--")
+        self.cell_display.setStyleSheet(
+            "padding: 8px; background-color: white; border: 1px solid #bdc3c7; border-radius: 3px;"
+        )
+        config_layout.addRow("Célula:", self.cell_display)
+
+        self.factory_display = QLabel("--")
+        self.factory_display.setStyleSheet(
+            "padding: 8px; background-color: white; border: 1px solid #bdc3c7; border-radius: 3px;"
+        )
+        config_layout.addRow("Fábrica:", self.factory_display)
+
+        self.leader_display = QLabel("--")
+        self.leader_display.setStyleSheet(
+            "padding: 8px; background-color: white; border: 1px solid #bdc3c7; border-radius: 3px;"
+        )
+        config_layout.addRow("Líder:", self.leader_display)
+
+        config_group.setLayout(config_layout)
+        layout.addWidget(config_group)
 
         # Botões de ação
         btn_layout = QHBoxLayout()
+        btn_layout.setSpacing(15)
 
-        self.configure_btn = QPushButton("Configurar")
+        self.configure_btn = QPushButton("⚙️ Configurar")
+        self.configure_btn.setMinimumHeight(45)
+        self.configure_btn.setStyleSheet(
+            """
+            QPushButton {
+                background-color: #3498db;
+                color: white;
+                padding: 10px 20px;
+                border: none;
+                border-radius: 5px;
+                font-weight: bold;
+                font-size: 11pt;
+            }
+            QPushButton:hover {
+                background-color: #2980b9;
+            }
+            QPushButton:pressed {
+                background-color: #21618c;
+            }
+        """
+        )
         self.configure_btn.clicked.connect(self.on_configure)
         btn_layout.addWidget(self.configure_btn)
 
-        self.start_stop_btn = QPushButton("Iniciar Análise")
+        self.start_stop_btn = QPushButton("▶️ Iniciar Análise")
+        self.start_stop_btn.setMinimumHeight(45)
+        self.start_stop_btn.setStyleSheet(
+            """
+            QPushButton {
+                background-color: #27ae60;
+                color: white;
+                padding: 10px 20px;
+                border: none;
+                border-radius: 5px;
+                font-weight: bold;
+                font-size: 11pt;
+            }
+            QPushButton:hover {
+                background-color: #229954;
+            }
+            QPushButton:pressed {
+                background-color: #1e8449;
+            }
+            QPushButton:disabled {
+                background-color: #95a5a6;
+            }
+        """
+        )
         self.start_stop_btn.clicked.connect(self.on_start_stop)
         btn_layout.addWidget(self.start_stop_btn)
 
         layout.addLayout(btn_layout)
 
-        # Status
-        status_layout = QHBoxLayout()
-        status_layout.addWidget(QLabel("Status:"))
-        self.status_label = QLabel("Parado")
-        self.status_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        # Status em cards separados
+        status_container = QHBoxLayout()
+        status_container.setSpacing(10)
+
+        # Card Status Geral
+        status_card = QGroupBox("Status do Sistema")
+        status_card.setStyleSheet(
+            """
+            QGroupBox {
+                font-weight: bold;
+                border: 2px solid #95a5a6;
+                border-radius: 8px;
+                margin-top: 5px;
+                padding-top: 10px;
+                background-color: #ffffff;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px;
+                color: #34495e;
+            }
+        """
+        )
+        status_layout = QVBoxLayout()
+        self.status_label = QLabel("⏸️ Parado")
+        self.status_label.setAlignment(Qt.AlignCenter)
+        self.status_label.setStyleSheet(
+            "font-size: 14pt; font-weight: bold; color: #e74c3c; padding: 15px;"
+        )
         status_layout.addWidget(self.status_label)
-        layout.addLayout(status_layout)
+        status_card.setLayout(status_layout)
+        status_container.addWidget(status_card)
 
-        # Status TAKT
-        takt_layout = QHBoxLayout()
-        takt_label_title = QLabel("Etapa Takt:")
-        self.status_takt = QLabel("...")
-        self.status_takt.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-
-        takt_layout.addWidget(takt_label_title)
+        # Card Etapa Takt
+        takt_card = QGroupBox("Etapa Takt Atual")
+        takt_card.setStyleSheet(
+            """
+            QGroupBox {
+                font-weight: bold;
+                border: 2px solid #95a5a6;
+                border-radius: 8px;
+                margin-top: 5px;
+                padding-top: 10px;
+                background-color: #ffffff;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px;
+                color: #34495e;
+            }
+        """
+        )
+        takt_layout = QVBoxLayout()
+        self.status_takt = QLabel("--")
+        self.status_takt.setAlignment(Qt.AlignCenter)
+        self.status_takt.setStyleSheet(
+            "font-size: 24pt; font-weight: bold; color: #16a085; padding: 15px;"
+        )
         takt_layout.addWidget(self.status_takt)
-        layout.addLayout(takt_layout)
+        takt_card.setLayout(takt_layout)
+        status_container.addWidget(takt_card)
+
+        layout.addLayout(status_container)
 
         self.setLayout(layout)
-
-        # Inicia com os inputs desabilitados
-        self.set_inputs_enabled(False)
-
-    def set_inputs_enabled(self, enabled: bool):
-        self.cell_input.setReadOnly(not enabled)
-        self.factory_input.setReadOnly(not enabled)
-        self.leader_input.setReadOnly(not enabled)
+        self.setMinimumWidth(600)
+        self.setMinimumHeight(450)
 
     def _load(self):
+        """Carrega e exibe a configuração atual"""
         cfg = load_config()
-        self.cell_input.setText(cfg.get("cell_number", ""))
-        self.factory_input.setText(cfg.get("factory", ""))
-        self.leader_input.setText(cfg.get("cell_leader", ""))
+        self.cell_display.setText(cfg.get("cell_number", "--"))
+        self.factory_display.setText(cfg.get("factory", "--"))
+        self.leader_display.setText(cfg.get("cell_leader", "--"))
 
     def on_configure(self):
-        # Alterna o modo de edição. Se estiver saindo do modo de edição -> salvar
-        currently_readonly = self.cell_input.isReadOnly()
-        if currently_readonly:
-            # Habilita edição
-            self.start_stop_btn.setDisabled(True)  # desabilita enquanto edita
-            self.set_inputs_enabled(True)
-            self.configure_btn.setText("Salvar Configuração")
-        else:
-            # Salva e desabilita edição
-            self.start_stop_btn.setDisabled(False)  # reabilita
-
-            data = {
-                "cell_number": self.cell_input.text().strip(),
-                "factory": self.factory_input.text().strip(),
-                "cell_leader": self.leader_input.text().strip(),
-            }
-            try:
-                save_config(data)
-                QMessageBox.information(
-                    self, "Configuração", "Configuração salva com sucesso."
-                )
-            except Exception as e:
-                QMessageBox.critical(self, "Erro", f"Falha ao salvar configuração: {e}")
-            self.set_inputs_enabled(False)
-            self.configure_btn.setText("Configurar")
+        """Abre o diálogo de configuração"""
+        dialog = ConfigDialog(self)
+        if dialog.exec_() == QDialog.Accepted:
+            # Atualiza a exibição após salvar
+            self._load()
 
     def on_start_stop(self):
         print("Iniciando/parando análise...")
@@ -172,17 +469,36 @@ class MainWindow(QWidget):
                     QMessageBox.Yes | QMessageBox.No,
                 )
                 if reply == QMessageBox.Yes:
-                    self.set_inputs_enabled(True)
-                    self.configure_btn.setText("Salvar Configuração")
-                    return
+                    self.on_configure()
+                return
 
             # iniciar análise
             self._analysis_running = True
-            self.start_stop_btn.setText("Parar Análise")
-            self.status_label.setText("Executando")
-            # Desabilitar edição de inputs enquanto roda
-            self.set_inputs_enabled(False)
-            self.configure_btn.setText("Configurar")
+            self.start_stop_btn.setText("⏹️ Parar Análise")
+            self.start_stop_btn.setStyleSheet(
+                """
+                QPushButton {
+                    background-color: #e74c3c;
+                    color: white;
+                    padding: 10px 20px;
+                    border: none;
+                    border-radius: 5px;
+                    font-weight: bold;
+                    font-size: 11pt;
+                }
+                QPushButton:hover {
+                    background-color: #c0392b;
+                }
+                QPushButton:pressed {
+                    background-color: #a93226;
+                }
+            """
+            )
+            self.status_label.setText("▶️ Executando")
+            self.status_label.setStyleSheet(
+                "font-size: 14pt; font-weight: bold; color: #27ae60; padding: 15px;"
+            )
+            self.configure_btn.setEnabled(False)
 
             # Iniciar worker em thread separada
             if self._worker_thread is None or not self._worker_thread.isRunning():
@@ -193,8 +509,34 @@ class MainWindow(QWidget):
         else:
             # parar
             self._analysis_running = False
-            self.start_stop_btn.setText("Iniciar Análise")
-            self.status_label.setText("Parado")
+            self.start_stop_btn.setText("▶️ Iniciar Análise")
+            self.start_stop_btn.setStyleSheet(
+                """
+                QPushButton {
+                    background-color: #27ae60;
+                    color: white;
+                    padding: 10px 20px;
+                    border: none;
+                    border-radius: 5px;
+                    font-weight: bold;
+                    font-size: 11pt;
+                }
+                QPushButton:hover {
+                    background-color: #229954;
+                }
+                QPushButton:pressed {
+                    background-color: #1e8449;
+                }
+                QPushButton:disabled {
+                    background-color: #95a5a6;
+                }
+            """
+            )
+            self.status_label.setText("⏸️ Parado")
+            self.status_label.setStyleSheet(
+                "font-size: 14pt; font-weight: bold; color: #e74c3c; padding: 15px;"
+            )
+            self.configure_btn.setEnabled(True)
             # Solicitar parada do worker e aguardar finalizar
             if self._worker_thread and self._worker_thread.isRunning():
                 self._worker_thread.stop()
