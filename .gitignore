@@ -9,3 +9,8 @@ utils/
 *.cache
 __pycache__/
 .env*
+
+# Log files
+*.log
+app_debug.log
+main_debug.log

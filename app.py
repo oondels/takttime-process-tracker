@@ -21,18 +21,32 @@ import asyncio
 import importlib
 import time
 
+# Configuração de logging detalhado
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s",
+    handlers=[
+        logging.FileHandler("app_debug.log"),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
 
 CONFIG_DIR = os.path.join(os.path.dirname(__file__), "config")
 CONFIG_PATH = os.path.join(CONFIG_DIR, "config.json")
+logger.debug(f"CONFIG_DIR: {CONFIG_DIR}, CONFIG_PATH: {CONFIG_PATH}")
 
 
 def ensure_config_dir():
+    logger.debug(f"Criando diretório de configuração: {CONFIG_DIR}")
     os.makedirs(CONFIG_DIR, exist_ok=True)
 
 
 def load_config():
+    logger.debug("Carregando configuração...")
     ensure_config_dir()
     if not os.path.exists(CONFIG_PATH):
+        logger.warning(f"Arquivo de configuração não encontrado: {CONFIG_PATH}. Usando configuração padrão.")
         return {
             "device": {"cell_number": "", "factory": "", "cell_leader": ""},
             "network": {"wifi_ssid": "", "wifi_pass": ""},
@@ -41,9 +55,11 @@ def load_config():
     try:
         with open(CONFIG_PATH, "r", encoding="utf-8") as f:
             config = json.load(f)
+            logger.debug(f"Configuração carregada: {config}")
             # Migração de configuração antiga para nova estrutura
             if "cell_number" in config:
-                return {
+                logger.info("Migrando configuração antiga para nova estrutura")
+                migrated_config = {
                     "device": {
                         "cell_number": config.get("cell_number", ""),
                         "factory": config.get("factory", ""),
@@ -52,8 +68,11 @@ def load_config():
                     "network": {"wifi_ssid": "", "wifi_pass": ""},
                     "tech": {"amqp_host": "", "amqp_user": "", "amqp_pass": "", "model_path": "./train_2025.pt"}
                 }
+                logger.debug(f"Configuração migrada: {migrated_config}")
+                return migrated_config
             return config
-    except Exception:
+    except Exception as e:
+        logger.error(f"Erro ao carregar configuração: {e}", exc_info=True)
         return {
             "device": {"cell_number": "", "factory": "", "cell_leader": ""},
             "network": {"wifi_ssid": "", "wifi_pass": ""},
@@ -62,9 +81,15 @@ def load_config():
 
 
 def save_config(data: dict):
+    logger.debug(f"Salvando configuração: {data}")
     ensure_config_dir()
-    with open(CONFIG_PATH, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+    try:
+        with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        logger.info(f"Configuração salva com sucesso em: {CONFIG_PATH}")
+    except Exception as e:
+        logger.error(f"Erro ao salvar configuração: {e}", exc_info=True)
+        raise
 
 
 class ConfigDialog(QDialog):
@@ -72,6 +97,7 @@ class ConfigDialog(QDialog):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        logger.debug("Inicializando ConfigDialog")
         self.setWindowTitle("Configurações do Sistema")
         self.setModal(True)
         self.setMinimumWidth(600)
@@ -285,6 +311,7 @@ class ConfigDialog(QDialog):
 
     def on_save(self):
         """Valida e salva a configuração"""
+        logger.debug("Tentando salvar configuração...")
         # Dispositivo
         cell = self.cell_input.text().strip()
         factory = self.factory_input.text().strip()
@@ -300,8 +327,12 @@ class ConfigDialog(QDialog):
         amqp_pass = self.amqp_pass_input.text().strip()
         model_path = self.model_path_input.text().strip() or "./train_2025.pt"
 
+        logger.debug(f"Valores do formulário - Cell: {cell}, Factory: {factory}, Leader: {leader}")
+        logger.debug(f"WiFi SSID: {wifi_ssid}, AMQP Host: {amqp_host}, Model: {model_path}")
+
         # Validação básica - apenas campos do dispositivo são obrigatórios
         if not cell or not factory or not leader:
+            logger.warning("Validação falhou: campos obrigatórios vazios")
             QMessageBox.warning(
                 self,
                 "Campos Obrigatórios",
@@ -330,6 +361,7 @@ class ConfigDialog(QDialog):
 
         try:
             save_config(data)
+            logger.info("Configuração salva com sucesso via dialog")
             QMessageBox.information(
                 self,
                 "Sucesso",
@@ -337,6 +369,7 @@ class ConfigDialog(QDialog):
             )
             self.accept()
         except Exception as e:
+            logger.error(f"Erro ao salvar configuração via dialog: {e}", exc_info=True)
             QMessageBox.critical(self, "Erro", f"Falha ao salvar configuração:\n{e}")
 
     def get_config(self):
@@ -363,6 +396,7 @@ class ConfigDialog(QDialog):
 class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
+        logger.info("=== Inicializando MainWindow ===")
         self.setWindowTitle("Takt-Time Process Tracker")
         self._analysis_running = False
         self._worker_thread = None
@@ -378,11 +412,13 @@ class MainWindow(QWidget):
         self._mqtt_connected = False
         self._initialization_thread = None
 
+        logger.debug("Construindo interface gráfica...")
         self._build_ui()
         self._load()
 
         # Desabilita botão iniciar até que modelo e MQTT estejam prontos
         self.start_stop_btn.setEnabled(False)
+        logger.info("Botão 'Iniciar Análise' desabilitado até verificação de pré-requisitos")
         
         # Inicia verificação de pré-requisitos
         self._check_prerequisites()
@@ -392,6 +428,7 @@ class MainWindow(QWidget):
         self._takt_timer.setInterval(1000)  # checa a cada 1s
         self._takt_timer.timeout.connect(self._check_takt_screen_status)
         self._takt_timer.start()
+        logger.debug("Timer de verificação de status iniciado (1s)")
 
     def _build_ui(self):
         layout = QVBoxLayout()
@@ -611,23 +648,29 @@ class MainWindow(QWidget):
 
     def _load(self):
         """Carrega e exibe a configuração atual"""
+        logger.debug("Carregando configuração na interface...")
         cfg = load_config()
         device = cfg.get("device", {})
         self.cell_display.setText(device.get("cell_number", "--"))
         self.factory_display.setText(device.get("factory", "--"))
         self.leader_display.setText(device.get("cell_leader", "--"))
+        logger.info(f"Configuração exibida - Célula: {device.get('cell_number')}, Fábrica: {device.get('factory')}")
 
     def on_configure(self):
         """Abre o diálogo de configuração"""
+        logger.info("Abrindo diálogo de configuração")
         dialog = ConfigDialog(self)
         if dialog.exec_() == QDialog.Accepted:
+            logger.info("Configuração aceita, atualizando exibição")
             # Atualiza a exibição após salvar
             self._load()
             # Re-verifica pré-requisitos após mudança de configuração
+            logger.debug("Re-verificando pré-requisitos após mudança de configuração")
             self._check_prerequisites()
 
     def _check_prerequisites(self):
         """Verifica se modelo e MQTT estão disponíveis antes de habilitar análise"""
+        logger.info("=== Iniciando verificação de pré-requisitos ===")
         self.start_stop_btn.setEnabled(False)
         self.start_stop_btn.setText("⏳ Verificando Sistema...")
         
@@ -639,25 +682,33 @@ class MainWindow(QWidget):
         
         # Inicia thread de verificação
         if self._initialization_thread is None or not self._initialization_thread.isRunning():
+            logger.debug("Iniciando InitializationWorker thread")
             self._initialization_thread = InitializationWorker(self)
             self._initialization_thread.status_update.connect(self._on_initialization_update)
             self._initialization_thread.start()
+        else:
+            logger.warning("InitializationWorker thread já está em execução")
 
     def _on_initialization_update(self, data: dict):
         """Processa updates da thread de inicialização"""
         event = data.get("event")
+        logger.debug(f"Evento de inicialização recebido: {event} - Dados: {data}")
         
         if event == "model_check_start":
+            logger.info("Iniciando verificação do modelo YOLO")
             self.model_status_label.setText("🟡 Modelo: Carregando...")
             
         elif event == "model_loaded":
             self._model_loaded = True
+            model_path = data.get("path", "N/A")
+            logger.info(f"✓ Modelo YOLO carregado com sucesso: {model_path}")
             self.model_status_label.setText("🟢 Modelo: Pronto")
             self.model_status_label.setStyleSheet("padding: 5px; font-size: 10pt; color: #27ae60;")
             
         elif event == "model_error":
             self._model_loaded = False
             error_msg = data.get("error", "Erro desconhecido")
+            logger.error(f"✗ Erro ao carregar modelo: {error_msg}")
             self.model_status_label.setText(f"🔴 Modelo: Erro")
             self.model_status_label.setStyleSheet("padding: 5px; font-size: 10pt; color: #e74c3c;")
             QMessageBox.critical(
@@ -667,16 +718,20 @@ class MainWindow(QWidget):
             )
             
         elif event == "mqtt_check_start":
+            logger.info("Iniciando verificação da conexão MQTT")
             self.mqtt_status_label.setText("🟡 MQTT: Conectando...")
             
         elif event == "mqtt_connected":
             self._mqtt_connected = True
+            mqtt_url = data.get("url", "N/A")
+            logger.info(f"✓ Conexão MQTT estabelecida: {mqtt_url}")
             self.mqtt_status_label.setText("🟢 MQTT: Conectado")
             self.mqtt_status_label.setStyleSheet("padding: 5px; font-size: 10pt; color: #27ae60;")
             
         elif event == "mqtt_error":
             self._mqtt_connected = False
             error_msg = data.get("error", "Erro desconhecido")
+            logger.error(f"✗ Erro na conexão MQTT: {error_msg}")
             self.mqtt_status_label.setText(f"🔴 MQTT: Erro")
             self.mqtt_status_label.setStyleSheet("padding: 5px; font-size: 10pt; color: #e74c3c;")
             QMessageBox.warning(
@@ -687,6 +742,7 @@ class MainWindow(QWidget):
         
         # Habilita botão apenas se ambos estiverem OK
         if self._model_loaded and self._mqtt_connected:
+            logger.info("✓✓ Todos os pré-requisitos OK! Sistema pronto para iniciar")
             self.start_stop_btn.setEnabled(True)
             self.start_stop_btn.setText("▶️ Iniciar Análise")
             self.status_label.setText("✅ Sistema Pronto")
@@ -694,6 +750,7 @@ class MainWindow(QWidget):
                 "font-size: 14pt; font-weight: bold; color: #27ae60; padding: 15px;"
             )
         elif event in ["model_error", "mqtt_error"]:
+            logger.warning("Sistema indisponível devido a erros na inicialização")
             self.start_stop_btn.setText("❌ Sistema Indisponível")
             self.status_label.setText("❌ Erro na Inicialização")
             self.status_label.setStyleSheet(
@@ -701,14 +758,16 @@ class MainWindow(QWidget):
             )
 
     def on_start_stop(self):
-        print("Iniciando/parando análise...")
+        logger.info("=== Botão Iniciar/Parar pressionado ===")
         if not self._analysis_running:
+            logger.info("Tentando iniciar análise...")
             # Start analysis: check that config exists
             cfg = load_config()
             device = cfg.get("device", {})
             if not (
                 device.get("cell_number") and device.get("factory") and device.get("cell_leader")
             ):
+                logger.warning("Configuração do dispositivo incompleta")
                 reply = QMessageBox.question(
                     self,
                     "Configuração incompleta",
@@ -720,6 +779,7 @@ class MainWindow(QWidget):
                 return
 
             # iniciar análise
+            logger.info("Iniciando análise de takt-time...")
             self._analysis_running = True
             self.start_stop_btn.setText("⏹️ Parar Análise")
             self.start_stop_btn.setStyleSheet(
@@ -749,12 +809,17 @@ class MainWindow(QWidget):
 
             # Iniciar worker em thread separada
             if self._worker_thread is None or not self._worker_thread.isRunning():
+                logger.debug("Criando e iniciando AsyncWorker thread")
                 self._worker_thread = AsyncWorker(self)
                 # Conecta o sinal do worker para atualizar o label na UI
                 self._worker_thread.status_update.connect(self.on_worker_status_update)
                 self._worker_thread.start()
+                logger.info("AsyncWorker thread iniciado")
+            else:
+                logger.warning("AsyncWorker thread já está em execução")
         else:
             # parar
+            logger.info("Parando análise...")
             self._analysis_running = False
             self.start_stop_btn.setText("▶️ Iniciar Análise")
             self.start_stop_btn.setStyleSheet(
@@ -786,46 +851,56 @@ class MainWindow(QWidget):
             self.configure_btn.setEnabled(True)
             # Solicitar parada do worker e aguardar finalizar
             if self._worker_thread and self._worker_thread.isRunning():
+                logger.debug("Solicitando parada do AsyncWorker thread")
                 self._worker_thread.stop()
                 self._worker_thread.wait(5000)  # aguarda até 5s
+                logger.info("AsyncWorker thread parado")
 
     def on_worker_status_update(self, data: dict):
-        if data.get("event") == "takt_screen_detected":
+        event = data.get("event")
+        logger.debug(f"Worker status update: {event} - {data}")
+        
+        if event == "takt_screen_detected":
+            logger.info("Tela de takt detectada")
             self.takt_screen_working = True
             self.status_label.setText("Analisando")
             self.last_takt_screen_check = time.monotonic()
             self.status_takt.setText(str(self.last_takt_time_count))
 
-        elif data.get("event") == "takt_detected":
+        elif event == "takt_detected":
+            takt_number = data.get("takt", self.last_takt_time_count)
+            logger.info(f"Takt detectado! Etapa: {takt_number}/3")
             self.takt_screen_working = True
             self.status_label.setText("Analisando")
             self.last_takt_screen_check = time.monotonic()
             # Atualiza o status da label takt (UI)
-            self.last_takt_time_count = data.get("takt", self.last_takt_time_count)
+            self.last_takt_time_count = takt_number
             self.status_takt.setText(str(self.last_takt_time_count))
 
             # Reseta o contador após chegar na etapa 3 com um timer de 3 segundos
             if self.last_takt_time_count == 3:
+                logger.info("Etapa 3/3 completada! Agendando reset do contador em 3 segundos")
                 if not hasattr(self, "_takt_reset_timer"):
                     self._takt_reset_timer = QTimer(self)
                     self._takt_reset_timer.setSingleShot(True)
                     self._takt_reset_timer.timeout.connect(self._reset_takt_counter)
                 # Reinicia o timer para 3 segundos
                 self._takt_reset_timer.start(3000)
-
-        # logging.info(f"Worker event: {data.get('event')} - {data}")
     
     def _reset_takt_counter(self):
         """Reseta o contador de takt tanto na UI quanto na variável interna"""
+        logger.info("Resetando contador de takt para 0")
         self.last_takt_time_count = 0
         self.status_takt.setText("0")
 
     def _check_takt_screen_status(self):
         # Desativa se passou do limite
         if self.takt_screen_working and self.last_takt_screen_check is not None:
-            if (time.monotonic() - self.last_takt_screen_check) > self.takt_timeout_sec:
+            elapsed = time.monotonic() - self.last_takt_screen_check
+            if elapsed > self.takt_timeout_sec:
                 # Continuar daqui
                 # TODO: Enviar mensagem a rabbitmq para acionar alarme de takt offline
+                logger.warning(f"Timeout! Tela de takt offline há {elapsed:.1f} segundos (limite: {self.takt_timeout_sec}s)")
                 print("Tempo máximo de Tela Takt offline alcançado!")
                 self.takt_screen_working = False
                 self._analysis_running = False
@@ -834,11 +909,17 @@ class MainWindow(QWidget):
 
     def closeEvent(self, event):
         # Garantir que worker é finalizado ao fechar janela
+        logger.info("Fechando aplicação, finalizando threads...")
         try:
             if self._worker_thread and self._worker_thread.isRunning():
+                logger.debug("Parando AsyncWorker thread...")
                 self._worker_thread.stop()
                 self._worker_thread.wait(5000)
+                logger.info("AsyncWorker thread finalizado")
+        except Exception as e:
+            logger.error(f"Erro ao finalizar thread: {e}", exc_info=True)
         finally:
+            logger.info("Aplicação encerrada")
             event.accept()
 
 
@@ -930,10 +1011,13 @@ class InitializationWorker(QThread):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        logger.debug("InitializationWorker criado")
 
     def run(self):
         """Verifica se modelo YOLO e conexão MQTT estão disponíveis"""
         import os
+        
+        logger.info("=== InitializationWorker: Iniciando verificações ===")
         
         # 1. Verificar Modelo YOLO
         self.status_update.emit({"event": "model_check_start"})
@@ -943,19 +1027,23 @@ class InitializationWorker(QThread):
             tech_config = cfg.get("tech", {})
             model_path = tech_config.get("model_path", "./train_2025.pt")
             
+            logger.debug(f"Verificando modelo em: {model_path}")
             # Verifica se arquivo existe
             if not os.path.exists(model_path):
                 raise FileNotFoundError(f"Modelo não encontrado em: {model_path}")
             
+            logger.debug("Arquivo do modelo encontrado, tentando carregar...")
             # Tenta carregar o modelo
             from ultralytics import YOLO
             model = YOLO(model_path)
             
             # Modelo carregado com sucesso
+            logger.info(f"Modelo YOLO carregado com sucesso: {model_path}")
             self.status_update.emit({"event": "model_loaded", "path": model_path})
             del model  # Libera memória
             
         except Exception as e:
+            logger.error(f"Erro ao verificar/carregar modelo: {e}", exc_info=True)
             self.status_update.emit({"event": "model_error", "error": str(e)})
             return  # Para aqui se modelo falhar
         
@@ -970,10 +1058,13 @@ class InitializationWorker(QThread):
             amqp_url = tech_config.get("amqp_host", "")
             
             if not amqp_url:
+                logger.debug("AMQP host não configurado, usando variável de ambiente ou padrão")
                 # Usa variável de ambiente ou padrão
                 from dotenv import load_dotenv
                 load_dotenv()
                 amqp_url = os.getenv("AMQP_URL", "amqp://dass:pHUWphISTl7r_Geis@10.110.21.3/")
+            
+            logger.debug(f"Testando conexão MQTT em: {amqp_url}")
             
             # Tenta conectar ao RabbitMQ
             async def test_connection():
@@ -987,11 +1078,16 @@ class InitializationWorker(QThread):
             loop.close()
             
             # Conexão bem-sucedida
+            logger.info(f"Conexão MQTT estabelecida com sucesso: {amqp_url}")
             self.status_update.emit({"event": "mqtt_connected", "url": amqp_url})
             
         except Exception as e:
+            logger.error(f"Erro ao verificar conexão MQTT: {e}", exc_info=True)
             self.status_update.emit({"event": "mqtt_error", "error": str(e)})
             return
+        
+        logger.info("=== InitializationWorker: Verificações concluídas com sucesso ===")
+
 
 
 def main():
