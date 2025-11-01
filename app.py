@@ -120,7 +120,7 @@ class ConfigDialog(QDialog):
         label_style = "font-weight: normal;"
 
         # ===== DISPOSITIVO =====
-        device_group = QGroupBox("🖥️ Dispositivo")
+        device_group = QGroupBox("Dispositivo")
         device_group.setStyleSheet(group_style)
         
         device_layout = QFormLayout()
@@ -152,7 +152,7 @@ class ConfigDialog(QDialog):
         main_layout.addWidget(device_group)
 
         # ===== REDE =====
-        network_group = QGroupBox("📡 Rede")
+        network_group = QGroupBox("Rede")
         network_group.setStyleSheet(group_style)
         
         network_layout = QFormLayout()
@@ -178,7 +178,7 @@ class ConfigDialog(QDialog):
         main_layout.addWidget(network_group)
 
         # ===== TÉCNICO =====
-        tech_group = QGroupBox("🔧 Configurações Técnicas")
+        tech_group = QGroupBox("Configurações Técnicas")
         tech_group.setStyleSheet(group_style)
         
         tech_layout = QFormLayout()
@@ -373,8 +373,19 @@ class MainWindow(QWidget):
         self.takt_timeout_sec = 6
         self.last_takt_time_count = 0
 
+        # Estado de inicialização e segurança
+        self._model_loaded = False
+        self._mqtt_connected = False
+        self._initialization_thread = None
+
         self._build_ui()
         self._load()
+
+        # Desabilita botão iniciar até que modelo e MQTT estejam prontos
+        self.start_stop_btn.setEnabled(False)
+        
+        # Inicia verificação de pré-requisitos
+        self._check_prerequisites()
 
         # Timer para verificar periodicamente o status
         self._takt_timer = QTimer(self)
@@ -573,9 +584,30 @@ class MainWindow(QWidget):
 
         layout.addLayout(status_container)
 
+        # Status de inicialização
+        init_status_layout = QHBoxLayout()
+        init_status_layout.setSpacing(10)
+
+        # Indicador de Modelo
+        self.model_status_label = QLabel("🔴 Modelo: Verificando...")
+        self.model_status_label.setStyleSheet(
+            "padding: 5px; font-size: 10pt; color: #e74c3c;"
+        )
+        init_status_layout.addWidget(self.model_status_label)
+
+        # Indicador de MQTT
+        self.mqtt_status_label = QLabel("🔴 MQTT: Verificando...")
+        self.mqtt_status_label.setStyleSheet(
+            "padding: 5px; font-size: 10pt; color: #e74c3c;"
+        )
+        init_status_layout.addWidget(self.mqtt_status_label)
+
+        init_status_layout.addStretch()
+        layout.addLayout(init_status_layout)
+
         self.setLayout(layout)
         self.setMinimumWidth(600)
-        self.setMinimumHeight(450)
+        self.setMinimumHeight(500)
 
     def _load(self):
         """Carrega e exibe a configuração atual"""
@@ -591,6 +623,82 @@ class MainWindow(QWidget):
         if dialog.exec_() == QDialog.Accepted:
             # Atualiza a exibição após salvar
             self._load()
+            # Re-verifica pré-requisitos após mudança de configuração
+            self._check_prerequisites()
+
+    def _check_prerequisites(self):
+        """Verifica se modelo e MQTT estão disponíveis antes de habilitar análise"""
+        self.start_stop_btn.setEnabled(False)
+        self.start_stop_btn.setText("⏳ Verificando Sistema...")
+        
+        # Atualiza status visual
+        self.model_status_label.setText("🟡 Modelo: Verificando...")
+        self.model_status_label.setStyleSheet("padding: 5px; font-size: 10pt; color: #f39c12;")
+        self.mqtt_status_label.setText("🟡 MQTT: Verificando...")
+        self.mqtt_status_label.setStyleSheet("padding: 5px; font-size: 10pt; color: #f39c12;")
+        
+        # Inicia thread de verificação
+        if self._initialization_thread is None or not self._initialization_thread.isRunning():
+            self._initialization_thread = InitializationWorker(self)
+            self._initialization_thread.status_update.connect(self._on_initialization_update)
+            self._initialization_thread.start()
+
+    def _on_initialization_update(self, data: dict):
+        """Processa updates da thread de inicialização"""
+        event = data.get("event")
+        
+        if event == "model_check_start":
+            self.model_status_label.setText("🟡 Modelo: Carregando...")
+            
+        elif event == "model_loaded":
+            self._model_loaded = True
+            self.model_status_label.setText("🟢 Modelo: Pronto")
+            self.model_status_label.setStyleSheet("padding: 5px; font-size: 10pt; color: #27ae60;")
+            
+        elif event == "model_error":
+            self._model_loaded = False
+            error_msg = data.get("error", "Erro desconhecido")
+            self.model_status_label.setText(f"🔴 Modelo: Erro")
+            self.model_status_label.setStyleSheet("padding: 5px; font-size: 10pt; color: #e74c3c;")
+            QMessageBox.critical(
+                self,
+                "Erro no Modelo",
+                f"Falha ao carregar o modelo YOLO:\n{error_msg}\n\nVerifique o caminho nas configurações.",
+            )
+            
+        elif event == "mqtt_check_start":
+            self.mqtt_status_label.setText("🟡 MQTT: Conectando...")
+            
+        elif event == "mqtt_connected":
+            self._mqtt_connected = True
+            self.mqtt_status_label.setText("🟢 MQTT: Conectado")
+            self.mqtt_status_label.setStyleSheet("padding: 5px; font-size: 10pt; color: #27ae60;")
+            
+        elif event == "mqtt_error":
+            self._mqtt_connected = False
+            error_msg = data.get("error", "Erro desconhecido")
+            self.mqtt_status_label.setText(f"🔴 MQTT: Erro")
+            self.mqtt_status_label.setStyleSheet("padding: 5px; font-size: 10pt; color: #e74c3c;")
+            QMessageBox.warning(
+                self,
+                "Erro na Conexão MQTT",
+                f"Falha ao conectar ao RabbitMQ:\n{error_msg}\n\nVerifique as configurações de rede e AMQP.",
+            )
+        
+        # Habilita botão apenas se ambos estiverem OK
+        if self._model_loaded and self._mqtt_connected:
+            self.start_stop_btn.setEnabled(True)
+            self.start_stop_btn.setText("▶️ Iniciar Análise")
+            self.status_label.setText("✅ Sistema Pronto")
+            self.status_label.setStyleSheet(
+                "font-size: 14pt; font-weight: bold; color: #27ae60; padding: 15px;"
+            )
+        elif event in ["model_error", "mqtt_error"]:
+            self.start_stop_btn.setText("❌ Sistema Indisponível")
+            self.status_label.setText("❌ Erro na Inicialização")
+            self.status_label.setStyleSheet(
+                "font-size: 14pt; font-weight: bold; color: #e74c3c; padding: 15px;"
+            )
 
     def on_start_stop(self):
         print("Iniciando/parando análise...")
@@ -810,6 +918,77 @@ class AsyncWorker(QThread):
                 self._pre_stop = True
         except Exception:
             pass
+
+
+class InitializationWorker(QThread):
+    """Thread para verificar modelo e conexão MQTT antes de iniciar análise"""
+
+    status_update = pyqtSignal(dict)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
+    def run(self):
+        """Verifica se modelo YOLO e conexão MQTT estão disponíveis"""
+        import os
+        
+        # 1. Verificar Modelo YOLO
+        self.status_update.emit({"event": "model_check_start"})
+        
+        try:
+            cfg = load_config()
+            tech_config = cfg.get("tech", {})
+            model_path = tech_config.get("model_path", "./train_2025.pt")
+            
+            # Verifica se arquivo existe
+            if not os.path.exists(model_path):
+                raise FileNotFoundError(f"Modelo não encontrado em: {model_path}")
+            
+            # Tenta carregar o modelo
+            from ultralytics import YOLO
+            model = YOLO(model_path)
+            
+            # Modelo carregado com sucesso
+            self.status_update.emit({"event": "model_loaded", "path": model_path})
+            del model  # Libera memória
+            
+        except Exception as e:
+            self.status_update.emit({"event": "model_error", "error": str(e)})
+            return  # Para aqui se modelo falhar
+        
+        # 2. Verificar Conexão MQTT
+        self.status_update.emit({"event": "mqtt_check_start"})
+        
+        try:
+            import aio_pika
+            
+            # Obtém configuração AMQP
+            tech_config = cfg.get("tech", {})
+            amqp_url = tech_config.get("amqp_host", "")
+            
+            if not amqp_url:
+                # Usa variável de ambiente ou padrão
+                from dotenv import load_dotenv
+                load_dotenv()
+                amqp_url = os.getenv("AMQP_URL", "amqp://user:password@broker-host/")
+            
+            # Tenta conectar ao RabbitMQ
+            async def test_connection():
+                connection = await aio_pika.connect_robust(amqp_url, timeout=5)
+                await connection.close()
+            
+            # Executa teste de conexão
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            loop.run_until_complete(test_connection())
+            loop.close()
+            
+            # Conexão bem-sucedida
+            self.status_update.emit({"event": "mqtt_connected", "url": amqp_url})
+            
+        except Exception as e:
+            self.status_update.emit({"event": "mqtt_error", "error": str(e)})
+            return
 
 
 def main():
