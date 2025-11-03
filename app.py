@@ -21,6 +21,11 @@ from PyQt5.QtGui import QFont, QIcon
 import asyncio
 import importlib
 import time
+from typing import Callable
+import re
+
+from mqtt_manager import MQTTManager
+
 
 # Configuração de logging detalhado
 logging.basicConfig(
@@ -55,9 +60,9 @@ def load_config():
             "device": {"cell_number": "", "factory": "", "cell_leader": ""},
             "network": {"wifi_ssid": "", "wifi_pass": ""},
             "tech": {
-                "amqp_host": "",
-                "amqp_user": "",
-                "amqp_pass": "",
+                "mqtt_host": "",
+                "mqtt_user": "",
+                "mqtt_pass": "",
                 "model_path": "./train_2025.pt",
             },
         }
@@ -75,9 +80,9 @@ def load_config():
                     },
                     "network": {"wifi_ssid": "", "wifi_pass": ""},
                     "tech": {
-                        "amqp_host": "",
-                        "amqp_user": "",
-                        "amqp_pass": "",
+                        "mqtt_host": "",
+                        "mqtt_user": "",
+                        "mqtt_pass": "",
                         "model_path": "./train_2025.pt",
                     },
                 }
@@ -90,9 +95,9 @@ def load_config():
             "device": {"cell_number": "", "factory": "", "cell_leader": ""},
             "network": {"wifi_ssid": "", "wifi_pass": ""},
             "tech": {
-                "amqp_host": "",
-                "amqp_user": "",
-                "amqp_pass": "",
+                "mqtt_host": "",
+                "mqtt_user": "",
+                "mqtt_pass": "",
                 "model_path": "./train_2025.pt",
             },
         }
@@ -120,7 +125,9 @@ class ConfigDialog(QDialog):
         self.setModal(True)
         self.setMinimumWidth(600)
         self.setMinimumHeight(650)
-        self.tech_unlocked = False  # Controla se as configurações técnicas estão desbloqueadas
+        self.tech_unlocked = (
+            False  # Controla se as configurações técnicas estão desbloqueadas
+        )
         self._build_ui()
         self._load_current_config()
 
@@ -227,14 +234,15 @@ class ConfigDialog(QDialog):
         tech_header_widget = QWidget()
         tech_header_layout = QHBoxLayout()
         tech_header_layout.setContentsMargins(0, 0, 0, 0)
-        
+
         tech_title_label = QLabel("Configurações Técnicas")
         tech_title_label.setStyleSheet("font-weight: bold; font-size: 12px;")
-        
+
         # Botão de cadeado
         self.lock_button = QPushButton("🔒")
         self.lock_button.setFixedSize(30, 30)
-        self.lock_button.setStyleSheet("""
+        self.lock_button.setStyleSheet(
+            """
             QPushButton {
                 background-color: #ff9800;
                 color: white;
@@ -245,15 +253,16 @@ class ConfigDialog(QDialog):
             QPushButton:hover {
                 background-color: #f57c00;
             }
-        """)
+        """
+        )
         self.lock_button.setToolTip("Clique para desbloquear as configurações técnicas")
         self.lock_button.clicked.connect(self._unlock_tech_config)
-        
+
         tech_header_layout.addWidget(tech_title_label)
         tech_header_layout.addWidget(self.lock_button)
         tech_header_layout.addStretch()
         tech_header_widget.setLayout(tech_header_layout)
-        
+
         tech_group = QGroupBox()
         tech_group.setStyleSheet(group_style)
 
@@ -261,30 +270,30 @@ class ConfigDialog(QDialog):
         tech_layout.setSpacing(12)
         tech_layout.setContentsMargins(20, 20, 20, 20)
 
-        self.amqp_host_input = QLineEdit()
-        self.amqp_host_input.setPlaceholderText("Ex: 10.110.1.1")
-        self.amqp_host_input.setStyleSheet(input_style)
-        self.amqp_host_input.setReadOnly(True)  # Bloqueado por padrão
-        amqp_host_label = QLabel("AMQP Host:")
-        amqp_host_label.setStyleSheet(label_style)
-        tech_layout.addRow(amqp_host_label, self.amqp_host_input)
+        self.mqtt_host_input = QLineEdit()
+        self.mqtt_host_input.setPlaceholderText("Ex: 10.110.1.1")
+        self.mqtt_host_input.setStyleSheet(input_style)
+        self.mqtt_host_input.setReadOnly(True)  # Bloqueado por padrão
+        mqtt_host_label = QLabel("mqtt Host:")
+        mqtt_host_label.setStyleSheet(label_style)
+        tech_layout.addRow(mqtt_host_label, self.mqtt_host_input)
 
-        self.amqp_user_input = QLineEdit()
-        self.amqp_user_input.setPlaceholderText("Usuário RabbitMQ")
-        self.amqp_user_input.setStyleSheet(input_style)
-        self.amqp_user_input.setReadOnly(True)  # Bloqueado por padrão
-        amqp_user_label = QLabel("AMQP Usuário:")
-        amqp_user_label.setStyleSheet(label_style)
-        tech_layout.addRow(amqp_user_label, self.amqp_user_input)
+        self.mqtt_user_input = QLineEdit()
+        self.mqtt_user_input.setPlaceholderText("Usuário MQTT")
+        self.mqtt_user_input.setStyleSheet(input_style)
+        self.mqtt_user_input.setReadOnly(True)  # Bloqueado por padrão
+        mqtt_user_label = QLabel("mqtt Usuário:")
+        mqtt_user_label.setStyleSheet(label_style)
+        tech_layout.addRow(mqtt_user_label, self.mqtt_user_input)
 
-        self.amqp_pass_input = QLineEdit()
-        self.amqp_pass_input.setPlaceholderText("Senha RabbitMQ")
-        self.amqp_pass_input.setEchoMode(QLineEdit.Password)
-        self.amqp_pass_input.setStyleSheet(input_style)
-        self.amqp_pass_input.setReadOnly(True)  # Bloqueado por padrão
-        amqp_pass_label = QLabel("AMQP Senha:")
-        amqp_pass_label.setStyleSheet(label_style)
-        tech_layout.addRow(amqp_pass_label, self.amqp_pass_input)
+        self.mqtt_pass_input = QLineEdit()
+        self.mqtt_pass_input.setPlaceholderText("Senha MQTT")
+        self.mqtt_pass_input.setEchoMode(QLineEdit.Password)
+        self.mqtt_pass_input.setStyleSheet(input_style)
+        self.mqtt_pass_input.setReadOnly(True)  # Bloqueado por padrão
+        mqtt_pass_label = QLabel("mqtt Senha:")
+        mqtt_pass_label.setStyleSheet(label_style)
+        tech_layout.addRow(mqtt_pass_label, self.mqtt_pass_input)
 
         self.model_path_input = QLineEdit()
         self.model_path_input.setPlaceholderText("./train_2025.pt")
@@ -295,7 +304,7 @@ class ConfigDialog(QDialog):
         tech_layout.addRow(model_label, self.model_path_input)
 
         tech_group.setLayout(tech_layout)
-        
+
         # Layout vertical para agrupar o header e o grupo
         tech_container = QWidget()
         tech_container_layout = QVBoxLayout()
@@ -304,7 +313,7 @@ class ConfigDialog(QDialog):
         tech_container_layout.addWidget(tech_header_widget)
         tech_container_layout.addWidget(tech_group)
         tech_container.setLayout(tech_container_layout)
-        
+
         main_layout.addWidget(tech_container)
 
         # Botões de ação
@@ -356,12 +365,13 @@ class ConfigDialog(QDialog):
         if self.tech_unlocked:
             # Se já está desbloqueado, bloqueia novamente
             self.tech_unlocked = False
-            self.amqp_host_input.setReadOnly(True)
-            self.amqp_user_input.setReadOnly(True)
-            self.amqp_pass_input.setReadOnly(True)
+            self.mqtt_host_input.setReadOnly(True)
+            self.mqtt_user_input.setReadOnly(True)
+            self.mqtt_pass_input.setReadOnly(True)
             self.model_path_input.setReadOnly(True)
             self.lock_button.setText("🔒")
-            self.lock_button.setStyleSheet("""
+            self.lock_button.setStyleSheet(
+                """
                 QPushButton {
                     background-color: #ff9800;
                     color: white;
@@ -372,42 +382,40 @@ class ConfigDialog(QDialog):
                 QPushButton:hover {
                     background-color: #f57c00;
                 }
-            """)
-            self.lock_button.setToolTip("Clique para desbloquear as configurações técnicas")
+            """
+            )
+            self.lock_button.setToolTip(
+                "Clique para desbloquear as configurações técnicas"
+            )
             logger.info("Configurações técnicas bloqueadas")
             return
-        
+
         # Solicitar usuário
         username, ok = QInputDialog.getText(
-            self, 
-            "Autenticação Necessária", 
-            "Usuário:",
-            QLineEdit.Normal
+            self, "Autenticação Necessária", "Usuário:", QLineEdit.Normal
         )
-        
+
         if not ok or not username:
             return
-        
+
         # Solicitar senha
         password, ok = QInputDialog.getText(
-            self, 
-            "Autenticação Necessária", 
-            "Senha:",
-            QLineEdit.Password
+            self, "Autenticação Necessária", "Senha:", QLineEdit.Password
         )
-        
+
         if not ok or not password:
             return
-        
+
         # Validar credenciais
         if username == TECH_CONFIG_USER and password == TECH_CONFIG_PASS:
             self.tech_unlocked = True
-            self.amqp_host_input.setReadOnly(False)
-            self.amqp_user_input.setReadOnly(False)
-            self.amqp_pass_input.setReadOnly(False)
+            self.mqtt_host_input.setReadOnly(False)
+            self.mqtt_user_input.setReadOnly(False)
+            self.mqtt_pass_input.setReadOnly(False)
             self.model_path_input.setReadOnly(False)
             self.lock_button.setText("🔓")
-            self.lock_button.setStyleSheet("""
+            self.lock_button.setStyleSheet(
+                """
                 QPushButton {
                     background-color: #4CAF50;
                     color: white;
@@ -418,21 +426,20 @@ class ConfigDialog(QDialog):
                 QPushButton:hover {
                     background-color: #45a049;
                 }
-            """)
-            self.lock_button.setToolTip("Clique para bloquear as configurações técnicas")
+            """
+            )
+            self.lock_button.setToolTip(
+                "Clique para bloquear as configurações técnicas"
+            )
             logger.info("Configurações técnicas desbloqueadas com sucesso")
             QMessageBox.information(
                 self,
                 "Sucesso",
-                "Configurações técnicas desbloqueadas! Você pode agora editar os campos."
+                "Configurações técnicas desbloqueadas! Você pode agora editar os campos.",
             )
         else:
             logger.warning("Tentativa de autenticação falhou")
-            QMessageBox.warning(
-                self,
-                "Acesso Negado",
-                "Usuário ou senha incorretos!"
-            )
+            QMessageBox.warning(self, "Acesso Negado", "Usuário ou senha incorretos!")
 
     def _load_current_config(self):
         """Carrega a configuração atual nos campos"""
@@ -451,9 +458,9 @@ class ConfigDialog(QDialog):
 
         # Técnico
         tech = cfg.get("tech", {})
-        self.amqp_host_input.setText(tech.get("amqp_host", ""))
-        self.amqp_user_input.setText(tech.get("amqp_user", ""))
-        self.amqp_pass_input.setText(tech.get("amqp_pass", ""))
+        self.mqtt_host_input.setText(tech.get("mqtt_host", ""))
+        self.mqtt_user_input.setText(tech.get("mqtt_user", ""))
+        self.mqtt_pass_input.setText(tech.get("mqtt_pass", ""))
         self.model_path_input.setText(tech.get("model_path", "./train_2025.pt"))
 
     def on_save(self):
@@ -469,16 +476,16 @@ class ConfigDialog(QDialog):
         wifi_pass = self.wifi_pass_input.text().strip()
 
         # Técnico
-        amqp_host = self.amqp_host_input.text().strip()
-        amqp_user = self.amqp_user_input.text().strip()
-        amqp_pass = self.amqp_pass_input.text().strip()
+        mqtt_host = self.mqtt_host_input.text().strip()
+        mqtt_user = self.mqtt_user_input.text().strip()
+        mqtt_pass = self.mqtt_pass_input.text().strip()
         model_path = self.model_path_input.text().strip() or "./train_2025.pt"
 
         logger.debug(
             f"Valores do formulário - Cell: {cell}, Factory: {factory}, Leader: {leader}"
         )
         logger.debug(
-            f"WiFi SSID: {wifi_ssid}, AMQP Host: {amqp_host}, Model: {model_path}"
+            f"WiFi SSID: {wifi_ssid}, mqtt Host: {mqtt_host}, Model: {model_path}"
         )
 
         # Validação básica - apenas campos do dispositivo são obrigatórios
@@ -496,9 +503,9 @@ class ConfigDialog(QDialog):
             "device": {"cell_number": cell, "factory": factory, "cell_leader": leader},
             "network": {"wifi_ssid": wifi_ssid, "wifi_pass": wifi_pass},
             "tech": {
-                "amqp_host": amqp_host,
-                "amqp_user": amqp_user,
-                "amqp_pass": amqp_pass,
+                "mqtt_host": mqtt_host,
+                "mqtt_user": mqtt_user,
+                "mqtt_pass": mqtt_pass,
                 "model_path": model_path,
             },
         }
@@ -529,9 +536,9 @@ class ConfigDialog(QDialog):
                 "wifi_pass": self.wifi_pass_input.text().strip(),
             },
             "tech": {
-                "amqp_host": self.amqp_host_input.text().strip(),
-                "amqp_user": self.amqp_user_input.text().strip(),
-                "amqp_pass": self.amqp_pass_input.text().strip(),
+                "mqtt_host": self.mqtt_host_input.text().strip(),
+                "mqtt_user": self.mqtt_user_input.text().strip(),
+                "mqtt_pass": self.mqtt_pass_input.text().strip(),
                 "model_path": self.model_path_input.text().strip() or "./train_2025.pt",
             },
         }
@@ -902,7 +909,7 @@ class MainWindow(QWidget):
             QMessageBox.warning(
                 self,
                 "Erro na Conexão MQTT",
-                f"Falha ao conectar ao RabbitMQ:\n{error_msg}\n\nVerifique as configurações de rede e AMQP.",
+                f"Falha ao conectar ao MQTT:\n{error_msg}\n\nVerifique as configurações de rede e MQTT.",
             )
 
         # Habilita botão apenas se ambos estiverem OK
@@ -922,8 +929,35 @@ class MainWindow(QWidget):
                 "font-size: 14pt; font-weight: bold; color: #e74c3c; padding: 15px;"
             )
 
+    def _on_device_status_changed(self, device_id: str, connected: bool):
+        """Callback quando status do dispositivo ESP32 muda"""
+        status_text = "🟢 ONLINE" if connected else "🔴 OFFLINE"
+        logger.info(f"Mudança de status do dispositivo {device_id}: {status_text}")
+
+        # Atualizar UI com status do dispositivo
+        if connected:
+            self.mqtt_status_label.setText(f"🟢 ESP32: Conectado")
+            self.mqtt_status_label.setStyleSheet(
+                "padding: 5px; font-size: 10pt; color: #27ae60;"
+            )
+        else:
+            self.mqtt_status_label.setText(f"🔴 ESP32: Desconectado")
+            self.mqtt_status_label.setStyleSheet(
+                "padding: 5px; font-size: 10pt; color: #e74c3c;"
+            )
+            # Se dispositivo ficou offline durante análise, pausar
+            if self._analysis_running:
+                logger.warning("Dispositivo ESP32 offline durante análise!")
+                QMessageBox.warning(
+                    self,
+                    "Dispositivo Offline",
+                    f"O dispositivo {device_id} ficou offline!\n\nA análise será pausada.",
+                )
+                # Pausar análise
+                if self._analysis_running:
+                    self.on_start_stop()
+
     def on_start_stop(self):
-        logger.info("=== Botão Iniciar/Parar pressionado ===")
         if not self._analysis_running:
             logger.info("Tentando iniciar análise...")
             # Start analysis: check that config exists
@@ -979,6 +1013,9 @@ class MainWindow(QWidget):
                 logger.debug("Criando e iniciando AsyncWorker thread")
                 self._worker_thread = AsyncWorker(self)
                 # Conecta o sinal do worker para atualizar o label na UI
+                self._worker_thread.set_device_status_callback(
+                    self._on_device_status_changed
+                )
                 self._worker_thread.status_update.connect(self.on_worker_status_update)
                 self._worker_thread.start()
                 logger.info("AsyncWorker thread iniciado")
@@ -1047,7 +1084,7 @@ class MainWindow(QWidget):
             QMessageBox.critical(
                 self,
                 "Erro na Conexão",
-                f"Falha ao conectar ao RabbitMQ:\n{error_msg}\n\nA análise foi interrompida.",
+                f"Falha ao conectar ao MQTT:\n{error_msg}\n\nA análise foi interrompida.",
             )
             return
 
@@ -1129,7 +1166,13 @@ class AsyncWorker(QThread):
         self._task = None
         self._stop = None
         self._pre_stop = False
-        self._connection = None  # conexao RabbitMQ
+        self._mqtt_manager = None
+        self._device_status_callback = None
+
+    def set_device_status_callback(self, callback: Callable):
+        """Define callback para mudanças de status do dispositivo"""
+        self._device_status_callback = callback
+        logger.debug("Callback de status do dispositivo configurado no AsyncWorker")
 
     def run(self):
         try:
@@ -1147,36 +1190,58 @@ class AsyncWorker(QThread):
                 def on_event(event_name: str, payload: dict):
                     self.status_update.emit({"event": event_name, **payload})
 
-                logger.info("Estabelecendo conexão RabbitMQ")
+                logger.info("Estabelecendo conexão MQTT")
                 try:
                     # Carregar configuração
                     cfg = load_config()
                     tech_config = cfg.get("tech", {})
-                    amqp_host = tech_config.get("amqp_host", "")
-                    amqp_user = tech_config.get("amqp_user", "")
-                    amqp_pass = tech_config.get("amqp_pass", "")
+                    mqtt_host = tech_config.get("mqtt_host", "")
+                    mqtt_user = tech_config.get("mqtt_user", "")
+                    mqtt_pass = tech_config.get("mqtt_pass", "")
 
-                    # Construir URL
-                    if amqp_host.startswith("amqp://"):
-                        amqp_url = amqp_host
-                    else:
-                        amqp_url = f"amqp://{amqp_user}:{amqp_pass}@{amqp_host}/"
+                    device = cfg.get("device", {})
+                    cell_number = device.get("cell_number", "").strip()
+                    factory = device.get("factory", "").strip()
+                    
+                    factory_num = re.sub(r"\D", "", factory) or "0"
+                    cell_num = re.sub(r"\D", "", cell_number) or "0"
+                    device_id = f"cost-{factory_num}-{cell_num}"
 
-                    logger.debug(f"Conectando ao RabbitMQ: {amqp_url}")
-
-                    aio_pika = importlib.import_module("aio_pika")
-
-                    self._connection = await aio_pika.connect_robust(amqp_url)
-                    logger.info("Conexão RabbitMQ estabelecida no AsyncWorker")
-
-                    # Passar a conexão para o tracker (main)
-                    tracker = self._loop.create_task(
-                        tracker_main(on_event=on_event, connection=self._connection)
+                    mqtt_manager = MQTTManager(
+                        broker=mqtt_host,
+                        port=1883,
+                        username=mqtt_user,
+                        password=mqtt_pass,
+                        timeout_seconds=60,
                     )
+                    mqtt_manager.add_device(device_id)
+
+                    if self._device_status_callback:
+                        mqtt_manager.on_status_change(self._device_status_callback)
+                    self._mqtt_manager = mqtt_manager
+
+                    if mqtt_manager.connect(timeout=10):
+                        on_event("connected", {"url": f"{mqtt_host}:{1883}"})
+                        logger.info(f"Conexão MQTT estabelecida: {mqtt_host}")
+
+                        time.sleep(2)  # aguarda mensagem LWT
+                        if mqtt_manager.is_device_connected(device_id):
+                            logger.info(f"Dispositivo {device_id} está online")
+                        else:
+                            logger.warning(f"Dispositivo {device_id} está offline")
+
+                        # Passar a conexão para o tracker (main)
+                        tracker = self._loop.create_task(
+                            tracker_main(
+                                on_event=on_event,
+                                connection=mqtt_manager,
+                                device_id=device_id,
+                            )
+                        )
 
                 except Exception as e:
                     logger.error(
-                        f"✗ Erro ao estabelecer conexão RabbitMQ: {e}", exc_info=True
+                        f"✗ Erro ao estabelecer conexão MQTT: {e}", exc_info=True
                     )
                     on_event("connection_error", {"error": str(e)})
                     return
@@ -1212,10 +1277,10 @@ class AsyncWorker(QThread):
                         except asyncio.CancelledError:
                             pass
 
-                    if self._connection:
-                        logger.info("Fechando conexão RabbitMQ do AsyncWorker")
-                        await self._connection.close()
-                        self._connection = None
+                    if self._mqtt_manager:
+                        logger.info("Desconectando MQTT Manager do AsyncWorker")
+                        self._mqtt_manager.disconnect()
+                        self._mqtt_manager = None
 
             self._loop.run_until_complete(runner())
         finally:
