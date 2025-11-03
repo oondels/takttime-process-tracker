@@ -22,7 +22,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-logging.getLogger('pytesseract').setLevel(logging.WARNING)
+logging.getLogger("pytesseract").setLevel(logging.WARNING)
 
 # Carregar configuração do arquivo config.json
 CONFIG_DIR = os.path.join(os.path.dirname(__file__), "config")
@@ -47,7 +47,6 @@ def load_config():
     try:
         with open(CONFIG_PATH, "r", encoding="utf-8") as f:
             config = json.load(f)
-            logger.debug(f"Configuração carregada: {config}")
             return config
     except Exception as e:
         logger.error(f"Erro ao carregar configuração: {e}", exc_info=True)
@@ -170,25 +169,34 @@ def update_takt_count(current_count: int) -> int:
     return current_count + 1
 
 
-async def main(on_event: Optional[Callable[[str, Any], None]] = None):
+async def main(
+    on_event: Optional[Callable[[str, Any], None]] = None,
+    connection: Optional[aio_pika.RobustConnection] = None,
+):
     logger.info("=" * 60)
     logger.info(f"Iniciando Sistema de Detecção de Takt-Time")
     logger.info(f"Dispositivo: {DEVICE_ID}")
-    logger.info(f"Conectando ao RabbitMQ em {AMQP_URL}")
     logger.info("=" * 60)
 
     takt_tracker_count = 0
-    try:
-        logger.debug("Tentando estabelecer conexão robusta com RabbitMQ...")
-        connection = await aio_pika.connect_robust(AMQP_URL)
-        logger.info("Conectado ao RabbitMQ com sucesso!")
-    except Exception as e:
-        logger.error(f"Não foi possível conectar ao RabbitMQ: {e}", exc_info=True)
-        if on_event:
-            on_event("connection_error", {"error": str(e)})
-        return
 
-    async with connection:
+    connection_created = False
+    if connection is None:
+        try:
+            logger.debug("Tentando estabelecer conexão robusta com RabbitMQ...")
+            connection = await aio_pika.connect_robust(AMQP_URL)
+            connection_created = True
+            logger.info("Conectado ao RabbitMQ com sucesso!")
+        except Exception as e:
+            logger.error(f"Não foi possível conectar ao RabbitMQ: {e}", exc_info=True)
+            if on_event:
+                on_event("connection_error", {"error": str(e)})
+            return
+    else:
+        logger.info("Reutilizando conexão RabbitMQ existente do app.py")
+
+
+    try:
         channel = await connection.channel()
         logger.info("Canal RabbitMQ criado")
         if on_event:
@@ -332,7 +340,11 @@ async def main(on_event: Optional[Callable[[str, Any], None]] = None):
                 if on_event:
                     on_event("runtime_error", {"error": str(e)})
                 await asyncio.sleep(2)
-
+    finally:
+        if connection_created and connection:
+            logger.info("Conexão RabbitMQ fechada")
+            await connection.close()
+    
 
 if __name__ == "__main__":
     try:
