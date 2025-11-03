@@ -212,7 +212,7 @@ class ConfigDialog(QDialog):
         tech_layout.setContentsMargins(20, 20, 20, 20)
 
         self.amqp_host_input = QLineEdit()
-        self.amqp_host_input.setPlaceholderText("Ex: amqp://user:pass@host:port/")
+        self.amqp_host_input.setPlaceholderText("Ex: 10.110.1.1")
         self.amqp_host_input.setStyleSheet(input_style)
         amqp_host_label = QLabel("AMQP Host:")
         amqp_host_label.setStyleSheet(label_style)
@@ -858,10 +858,10 @@ class MainWindow(QWidget):
 
     def on_worker_status_update(self, data: dict):
         event = data.get("event")
-        logger.debug(f"Worker status update: {event} - {data}")
+        # logger.debug(f"Worker status update: {event} - {data}")
         
         if event == "takt_screen_detected":
-            logger.info("Tela de takt detectada")
+            # logger.info("Tela de takt detectada")
             self.takt_screen_working = True
             self.status_label.setText("Analisando")
             self.last_takt_screen_check = time.monotonic()
@@ -1055,14 +1055,13 @@ class InitializationWorker(QThread):
             
             # Obtém configuração AMQP
             tech_config = cfg.get("tech", {})
-            amqp_url = tech_config.get("amqp_host", "")
-            
+            amqp_host = tech_config.get("amqp_host", "")
+            amqp_user = tech_config.get("amqp_user", "")
+            amqp_pass = tech_config.get("amqp_pass", "")
+            amqp_url = f"amqp://{amqp_user}:{amqp_pass}@{amqp_host}/"
+
             if not amqp_url:
                 logger.debug("AMQP host não configurado, usando variável de ambiente ou padrão")
-                # Usa variável de ambiente ou padrão
-                from dotenv import load_dotenv
-                load_dotenv()
-                amqp_url = os.getenv("AMQP_URL", "amqp://dass:pHUWphISTl7r_Geis@10.110.21.3/")
             
             logger.debug(f"Testando conexão MQTT em: {amqp_url}")
             
