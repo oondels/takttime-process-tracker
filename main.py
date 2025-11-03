@@ -171,180 +171,178 @@ def update_takt_count(current_count: int) -> int:
 
 async def main(
     on_event: Optional[Callable[[str, Any], None]] = None,
-    connection: Optional[aio_pika.RobustConnection] = None,
+    connection: Optional[Any] = None,
+    device_id: Optional[str] = None,
 ):
     logger.info("=" * 60)
     logger.info(f"Iniciando Sistema de Detecção de Takt-Time")
-    logger.info(f"Dispositivo: {DEVICE_ID}")
+    if device_id:
+        logger.info(f"Dispositivo (passado por parâmetro): {device_id}")
+        DEVICE_ID_ACTUAL = device_id
+    else:
+        DEVICE_ID_ACTUAL = DEVICE_ID
+        logger.info(f"Dispositivo (config): {DEVICE_ID_ACTUAL}")
+
     logger.info("=" * 60)
 
     takt_tracker_count = 0
 
-    connection_created = False
-    if connection is None:
-        try:
-            logger.debug("Tentando estabelecer conexão robusta com RabbitMQ...")
-            connection = await aio_pika.connect_robust(AMQP_URL)
-            connection_created = True
-            logger.info("Conectado ao RabbitMQ com sucesso!")
-        except Exception as e:
-            logger.error(f"Não foi possível conectar ao RabbitMQ: {e}", exc_info=True)
-            if on_event:
-                on_event("connection_error", {"error": str(e)})
-            return
+    is_mqtt_manager = connection and hasattr(connection, "publish_command")
+
+    if is_mqtt_manager:
+        logger.info("Usando MQTTManager para comunicação")
+        if on_event:
+            on_event("connected", {"url": "MQTT Manager ativo"})
     else:
-        logger.info("Reutilizando conexão RabbitMQ existente do app.py")
-
-
-    try:
-        channel = await connection.channel()
-        logger.info("Canal RabbitMQ criado")
+        logger.error("Conexão MQTT inválida!")
         if on_event:
-            on_event("connected", {"amqp_url": AMQP_URL})
+            on_event("connection_error", {"error": "MQTTManager não fornecido"})
+        return
 
-        logger.info(f"Carregando modelo YOLO de: {MODEL_PATH}")
-        if not os.path.exists(MODEL_PATH):
-            logger.error(f"Modelo não encontrado em {MODEL_PATH}")
-            if on_event:
-                on_event("model_missing", {"path": MODEL_PATH})
-            return
-
-        model = YOLO(MODEL_PATH)
-        logger.info("Modelo YOLO carregado com sucesso!")
+    # Carregar modelo
+    logger.info(f"Carregando modelo YOLO de: {MODEL_PATH}")
+    if not os.path.exists(MODEL_PATH):
+        logger.error(f"Modelo não encontrado em {MODEL_PATH}")
         if on_event:
-            on_event("model_loaded", {"model_path": MODEL_PATH})
+            on_event("model_missing", {"path": MODEL_PATH})
+        return
 
-        last_message_time = None
-        last_sent_message = None
-        last_takt_screen_check = None
+    model = YOLO(MODEL_PATH)
+    logger.info("Modelo YOLO carregado com sucesso!")
+    if on_event:
+        on_event("model_loaded", {"model_path": MODEL_PATH})
 
-        logger.info("Iniciando loop principal de detecção...")
-        iteration = 0
+    last_message_time = None
+    last_sent_message = None
+    last_takt_screen_check = None
 
-        while True:
-            try:
-                iteration += 1
-                if iteration % 100 == 0:
-                    logger.debug(f"Loop de detecção - Iteração: {iteration}")
+    logger.info("Iniciando loop principal de detecção...")
+    iteration = 0
 
-                screen = ImageGrab.grab()
-                screen_np = np.array(screen)
-                frame = cv2.cvtColor(screen_np, cv2.COLOR_RGB2BGR)
-                # logger.debug(f"Screenshot capturado: {frame.shape}")
+    while True:
+        try:
+            iteration += 1
+            if iteration % 100 == 0:
+                logger.debug(f"Loop de detecção - Iteração: {iteration}")
 
-                # Fazer a predição no frame atual
-                results = model.predict(
-                    source=frame, stream=False, conf=0.15, verbose=False
-                )
+            screen = ImageGrab.grab()
+            screen_np = np.array(screen)
+            frame = cv2.cvtColor(screen_np, cv2.COLOR_RGB2BGR)
 
-                # num_detections = sum(len(result.boxes.xyxy) for result in results)
-                # if num_detections > 0:
-                #     logger.debug(f"YOLO detectou {num_detections} objetos")
+            # Fazer a predição no frame atual
+            results = model.predict(
+                source=frame, stream=False, conf=0.15, verbose=False
+            )
 
-                extracted_text = None
-                for result in results:
-                    for box in result.boxes.xyxy:
-                        roi = extract_roi(frame, box)
-                        if roi is None or roi.size == 0:
-                            continue
+            extracted_text = None
+            for result in results:
+                for box in result.boxes.xyxy:
+                    roi = extract_roi(frame, box)
+                    if roi is None or roi.size == 0:
+                        continue
 
-                        processed_roi = preprocess_for_ocr(roi)
-                        extracted_text = extract_takt_message(processed_roi)
+                    processed_roi = preprocess_for_ocr(roi)
+                    extracted_text = extract_takt_message(processed_roi)
 
-                # Decta o fim da etapa de um takt
-                if extracted_text and on_event:
-                    now = time.time()
+            # Detecta o fim da etapa de um takt
+            if extracted_text and on_event:
+                now = time.time()
 
-                    # Trata reconhecimento de tela da takt aberto (sem reconhecer fim de takt) - Faz check a cada 5 segundos
+                # Trata reconhecimento de tela da takt aberto (sem reconhecer fim de takt) - Faz check a cada 5 segundos
+                if (
+                    isinstance(extracted_text, dict)
+                    and extracted_text.get("event") == "takt_screen"
+                ):
                     if (
-                        isinstance(extracted_text, dict)
-                        and extracted_text.get("event") == "takt_screen"
+                        last_takt_screen_check is None
+                        or (now - last_takt_screen_check) > 5
                     ):
-                        if (
-                            last_takt_screen_check is None
-                            or (now - last_takt_screen_check) > 5
-                        ):
-                            # logger.debug("Tela de takt detectada (sem fim de etapa)")
-                            # Notifica a UI que a tela de takt está aberta
-                            on_event(
-                                "takt_screen_detected",
-                                {"message": extracted_text.get("message")},
-                            )
-                            last_takt_screen_check = now
-                        await asyncio.sleep(0.5)
-                        continue
-
-                    if last_sent_message is None or (
-                        time.time() - last_message_time > 2
-                    ):
-                        last_sent_message = extracted_text
-                        last_message_time = now
-
-                        # Atualiza o contador de detecções
-                        takt_tracker_count = update_takt_count(takt_tracker_count)
-                        logger.info(
-                            f"Contador de takt atualizado: {takt_tracker_count}/3"
+                        # Notifica a UI que a tela de takt está aberta
+                        on_event(
+                            "takt_screen_detected",
+                            {"message": extracted_text.get("message")},
                         )
+                        last_takt_screen_check = now
+                    await asyncio.sleep(0.5)
+                    continue
 
-                        match takt_tracker_count:
-                            case 1:
-                                print("\n")
-                                logger.info(">>> Primeira detecção de Takt (1/3)")
-                                on_event(
-                                    "takt_detected",
-                                    {
-                                        "takt": takt_tracker_count,
-                                    },
-                                )
+                if last_sent_message is None or (time.time() - last_message_time > 2):
+                    last_sent_message = extracted_text
+                    last_message_time = now
 
-                            case 2:
-                                print("\n")
-                                logger.info(">>> Segunda detecção de Takt (2/3)")
-                                on_event(
-                                    "takt_detected",
-                                    {
-                                        "takt": takt_tracker_count,
-                                    },
-                                )
-                            case 3:
-                                print("\n")
-                                logger.info(
-                                    ">>> Terceira detecção de Takt (3/3) - Talão completo!"
-                                )
-                                on_event(
-                                    "takt_detected",
-                                    {
-                                        "takt": takt_tracker_count,
-                                    },
-                                )
+                    # Atualiza o contador de detecções
+                    takt_tracker_count = update_takt_count(takt_tracker_count)
+                    logger.info(f"Contador de takt atualizado: {takt_tracker_count}/3")
 
-                        # Envia a mensagem para o RabbitMQ
-                        timestamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-                        extracted_text.update({"id": DEVICE_ID})
-                        extracted_text.update({"timestamp": timestamp})
-                        extracted_text.update({"takt_count": takt_tracker_count})
-                        await send_message(channel, ROUTING_KEY, extracted_text)
+                    match takt_tracker_count:
+                        case 1:
+                            print("\n")
+                            logger.info(">>> Primeira detecção de Takt (1/3)")
+                            on_event(
+                                "takt_detected",
+                                {
+                                    "takt": takt_tracker_count,
+                                },
+                            )
 
-                        if takt_tracker_count >= 3:
-                            # reseta contador
-                            takt_tracker_count = 0
-                    else:
-                        logger.debug("Mensagem ignorada (debounce de 2s ativo)")
-                        continue
+                        case 2:
+                            print("\n")
+                            logger.info(">>> Segunda detecção de Takt (2/3)")
+                            on_event(
+                                "takt_detected",
+                                {
+                                    "takt": takt_tracker_count,
+                                },
+                            )
+                        case 3:
+                            print("\n")
+                            logger.info(
+                                ">>> Terceira detecção de Takt (3/3) - Talão completo!"
+                            )
+                            on_event(
+                                "takt_detected",
+                                {
+                                    "takt": takt_tracker_count,
+                                },
+                            )
 
-                await asyncio.sleep(0.5)
-            except Exception as e:
-                logger.error(
-                    f"✗ Erro durante a execução do loop principal: {e}", exc_info=True
-                )
-                if on_event:
-                    on_event("runtime_error", {"error": str(e)})
-                await asyncio.sleep(2)
-    finally:
-        if connection_created and connection:
-            logger.info("Conexão RabbitMQ fechada")
-            await connection.close()
-    
+                    # Envia a mensagem via MQTT
+                    timestamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+                    extracted_text.update({"id": DEVICE_ID_ACTUAL})
+                    extracted_text.update({"timestamp": timestamp})
+                    extracted_text.update({"takt_count": takt_tracker_count})
+
+                    if is_mqtt_manager:
+                        success = connection.publish_command(
+                            DEVICE_ID_ACTUAL, extracted_text, qos=1
+                        )
+                        if success:
+                            logger.info(
+                                f"Mensagem enviada via MQTT: {extracted_text}"
+                            )
+                            if on_event:
+                                on_event("message_sent", extracted_text)
+                        else:
+                            logger.error("Falha ao enviar mensagem via MQTT")
+                            if on_event:
+                                on_event("message_error", {"error": "Falha no publish"})
+
+                    if takt_tracker_count >= 3:
+                        # reseta contador
+                        takt_tracker_count = 0
+                else:
+                    logger.debug("Mensagem ignorada (debounce de 2s ativo)")
+                    continue
+
+            await asyncio.sleep(0.5)
+        except Exception as e:
+            logger.error(
+                f"✗ Erro durante a execução do loop principal: {e}", exc_info=True
+            )
+            if on_event:
+                on_event("runtime_error", {"error": str(e)})
+            await asyncio.sleep(2)
+
 
 if __name__ == "__main__":
     try:
