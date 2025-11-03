@@ -14,6 +14,7 @@ from PyQt5.QtWidgets import (
     QGroupBox,
     QFormLayout,
     QDialogButtonBox,
+    QInputDialog,
 )
 from PyQt5.QtCore import Qt, QThread, QLibraryInfo, pyqtSignal, QTimer
 from PyQt5.QtGui import QFont, QIcon
@@ -32,6 +33,10 @@ logger = logging.getLogger(__name__)
 CONFIG_DIR = os.path.join(os.path.dirname(__file__), "config")
 CONFIG_PATH = os.path.join(CONFIG_DIR, "config.json")
 logger.debug(f"CONFIG_DIR: {CONFIG_DIR}, CONFIG_PATH: {CONFIG_PATH}")
+
+# Credenciais para desbloquear configurações técnicas
+TECH_CONFIG_USER = "admin"
+TECH_CONFIG_PASS = "dass@2025"
 
 
 def ensure_config_dir():
@@ -115,6 +120,7 @@ class ConfigDialog(QDialog):
         self.setModal(True)
         self.setMinimumWidth(600)
         self.setMinimumHeight(650)
+        self.tech_unlocked = False  # Controla se as configurações técnicas estão desbloqueadas
         self._build_ui()
         self._load_current_config()
 
@@ -217,7 +223,38 @@ class ConfigDialog(QDialog):
         main_layout.addWidget(network_group)
 
         # ===== TÉCNICO =====
-        tech_group = QGroupBox("Configurações Técnicas")
+        # Container para o título com cadeado
+        tech_header_widget = QWidget()
+        tech_header_layout = QHBoxLayout()
+        tech_header_layout.setContentsMargins(0, 0, 0, 0)
+        
+        tech_title_label = QLabel("Configurações Técnicas")
+        tech_title_label.setStyleSheet("font-weight: bold; font-size: 12px;")
+        
+        # Botão de cadeado
+        self.lock_button = QPushButton("🔒")
+        self.lock_button.setFixedSize(30, 30)
+        self.lock_button.setStyleSheet("""
+            QPushButton {
+                background-color: #ff9800;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                font-size: 14px;
+            }
+            QPushButton:hover {
+                background-color: #f57c00;
+            }
+        """)
+        self.lock_button.setToolTip("Clique para desbloquear as configurações técnicas")
+        self.lock_button.clicked.connect(self._unlock_tech_config)
+        
+        tech_header_layout.addWidget(tech_title_label)
+        tech_header_layout.addWidget(self.lock_button)
+        tech_header_layout.addStretch()
+        tech_header_widget.setLayout(tech_header_layout)
+        
+        tech_group = QGroupBox()
         tech_group.setStyleSheet(group_style)
 
         tech_layout = QFormLayout()
@@ -227,6 +264,7 @@ class ConfigDialog(QDialog):
         self.amqp_host_input = QLineEdit()
         self.amqp_host_input.setPlaceholderText("Ex: 10.110.1.1")
         self.amqp_host_input.setStyleSheet(input_style)
+        self.amqp_host_input.setReadOnly(True)  # Bloqueado por padrão
         amqp_host_label = QLabel("AMQP Host:")
         amqp_host_label.setStyleSheet(label_style)
         tech_layout.addRow(amqp_host_label, self.amqp_host_input)
@@ -234,6 +272,7 @@ class ConfigDialog(QDialog):
         self.amqp_user_input = QLineEdit()
         self.amqp_user_input.setPlaceholderText("Usuário RabbitMQ")
         self.amqp_user_input.setStyleSheet(input_style)
+        self.amqp_user_input.setReadOnly(True)  # Bloqueado por padrão
         amqp_user_label = QLabel("AMQP Usuário:")
         amqp_user_label.setStyleSheet(label_style)
         tech_layout.addRow(amqp_user_label, self.amqp_user_input)
@@ -242,6 +281,7 @@ class ConfigDialog(QDialog):
         self.amqp_pass_input.setPlaceholderText("Senha RabbitMQ")
         self.amqp_pass_input.setEchoMode(QLineEdit.Password)
         self.amqp_pass_input.setStyleSheet(input_style)
+        self.amqp_pass_input.setReadOnly(True)  # Bloqueado por padrão
         amqp_pass_label = QLabel("AMQP Senha:")
         amqp_pass_label.setStyleSheet(label_style)
         tech_layout.addRow(amqp_pass_label, self.amqp_pass_input)
@@ -249,12 +289,23 @@ class ConfigDialog(QDialog):
         self.model_path_input = QLineEdit()
         self.model_path_input.setPlaceholderText("./train_2025.pt")
         self.model_path_input.setStyleSheet(input_style)
+        self.model_path_input.setReadOnly(True)  # Bloqueado por padrão
         model_label = QLabel("Caminho do Modelo:")
         model_label.setStyleSheet(label_style)
         tech_layout.addRow(model_label, self.model_path_input)
 
         tech_group.setLayout(tech_layout)
-        main_layout.addWidget(tech_group)
+        
+        # Layout vertical para agrupar o header e o grupo
+        tech_container = QWidget()
+        tech_container_layout = QVBoxLayout()
+        tech_container_layout.setContentsMargins(0, 0, 0, 0)
+        tech_container_layout.setSpacing(5)
+        tech_container_layout.addWidget(tech_header_widget)
+        tech_container_layout.addWidget(tech_group)
+        tech_container.setLayout(tech_container_layout)
+        
+        main_layout.addWidget(tech_container)
 
         # Botões de ação
         button_box = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
@@ -299,6 +350,89 @@ class ConfigDialog(QDialog):
         main_layout.addWidget(button_box)
 
         self.setLayout(main_layout)
+
+    def _unlock_tech_config(self):
+        """Solicita autenticação para desbloquear configurações técnicas"""
+        if self.tech_unlocked:
+            # Se já está desbloqueado, bloqueia novamente
+            self.tech_unlocked = False
+            self.amqp_host_input.setReadOnly(True)
+            self.amqp_user_input.setReadOnly(True)
+            self.amqp_pass_input.setReadOnly(True)
+            self.model_path_input.setReadOnly(True)
+            self.lock_button.setText("🔒")
+            self.lock_button.setStyleSheet("""
+                QPushButton {
+                    background-color: #ff9800;
+                    color: white;
+                    border: none;
+                    border-radius: 4px;
+                    font-size: 14px;
+                }
+                QPushButton:hover {
+                    background-color: #f57c00;
+                }
+            """)
+            self.lock_button.setToolTip("Clique para desbloquear as configurações técnicas")
+            logger.info("Configurações técnicas bloqueadas")
+            return
+        
+        # Solicitar usuário
+        username, ok = QInputDialog.getText(
+            self, 
+            "Autenticação Necessária", 
+            "Usuário:",
+            QLineEdit.Normal
+        )
+        
+        if not ok or not username:
+            return
+        
+        # Solicitar senha
+        password, ok = QInputDialog.getText(
+            self, 
+            "Autenticação Necessária", 
+            "Senha:",
+            QLineEdit.Password
+        )
+        
+        if not ok or not password:
+            return
+        
+        # Validar credenciais
+        if username == TECH_CONFIG_USER and password == TECH_CONFIG_PASS:
+            self.tech_unlocked = True
+            self.amqp_host_input.setReadOnly(False)
+            self.amqp_user_input.setReadOnly(False)
+            self.amqp_pass_input.setReadOnly(False)
+            self.model_path_input.setReadOnly(False)
+            self.lock_button.setText("🔓")
+            self.lock_button.setStyleSheet("""
+                QPushButton {
+                    background-color: #4CAF50;
+                    color: white;
+                    border: none;
+                    border-radius: 4px;
+                    font-size: 14px;
+                }
+                QPushButton:hover {
+                    background-color: #45a049;
+                }
+            """)
+            self.lock_button.setToolTip("Clique para bloquear as configurações técnicas")
+            logger.info("Configurações técnicas desbloqueadas com sucesso")
+            QMessageBox.information(
+                self,
+                "Sucesso",
+                "Configurações técnicas desbloqueadas! Você pode agora editar os campos."
+            )
+        else:
+            logger.warning("Tentativa de autenticação falhou")
+            QMessageBox.warning(
+                self,
+                "Acesso Negado",
+                "Usuário ou senha incorretos!"
+            )
 
     def _load_current_config(self):
         """Carrega a configuração atual nos campos"""
@@ -776,7 +910,7 @@ class MainWindow(QWidget):
             logger.info(" Todos os pré-requisitos OK! Sistema pronto para iniciar")
             self.start_stop_btn.setEnabled(True)
             self.start_stop_btn.setText("▶️ Iniciar Análise")
-            self.status_label.setText("✅ Sistema Pronto")
+            self.status_label.setText("✔ Sistema Pronto")
             self.status_label.setStyleSheet(
                 "font-size: 14pt; font-weight: bold; color: #27ae60; padding: 15px;"
             )
