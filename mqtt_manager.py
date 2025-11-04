@@ -171,6 +171,7 @@ class MQTTManager:
         elif topic == device.heartbeat_topic:
             try:
                 heartbeat_data = json.loads(payload)
+                old_status = device.connected
                 device.last_heartbeat = heartbeat_data
                 device.last_seen = datetime.now()
                 device.connected = True
@@ -178,10 +179,21 @@ class MQTTManager:
                 logger.debug(
                     f"Heartbeat de {device.device_id}: "
                     f"Uptime={heartbeat_data.get('uptime')}s, "
-                    f"RSSI={heartbeat_data.get('wifi_rssi')}dBm"
+                    f"RSSI={heartbeat_data.get('wifi_rssi')}dBm, "
+                    f"Free Heap={heartbeat_data.get('free_heap')} bytes"
                 )
-            except json.JSONDecodeError:
-                logger.error(f"Erro ao decodificar heartbeat de {device.device_id}")
+                
+                # Notificar mudança de status se passou de offline para online
+                if not old_status and device.connected and self.on_status_change_callback:
+                    try:
+                        logger.info(f"🟢 {device.device_id}: online (via heartbeat)")
+                        self.on_status_change_callback(device.device_id, device.connected)
+                    except Exception as e:
+                        logger.error(
+                            f"Erro no callback de mudança de status (heartbeat): {e}", exc_info=True
+                        )
+            except json.JSONDecodeError as e:
+                logger.error(f"⚠️  Erro ao decodificar heartbeat de {device.device_id}: {e}")
 
     def _monitor_devices(self):
         """Thread para monitorar timeout de dispositivos"""
@@ -210,7 +222,8 @@ class MQTTManager:
 
     def is_device_connected(self, device_id: str) -> bool:
         """Verifica se um dispositivo está conectado"""
-        return self._connected and self.client.is_connected()
+        device = self.devices.get(device_id)
+        return device.connected if device else False
 
     def get_device_info(self, device_id: str) -> Optional[dict]:
         """Retorna informações do dispositivo"""
