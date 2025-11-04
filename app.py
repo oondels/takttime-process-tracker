@@ -785,12 +785,19 @@ class MainWindow(QWidget):
         )
         init_status_layout.addWidget(self.model_status_label)
 
-        # Indicador de MQTT
+        # Indicador de MQTT Broker
         self.mqtt_status_label = QLabel("🔴 MQTT: Verificando...")
         self.mqtt_status_label.setStyleSheet(
             "padding: 5px; font-size: 10pt; color: #e74c3c;"
         )
         init_status_layout.addWidget(self.mqtt_status_label)
+
+        # Indicador de ESP32
+        self.esp32_status_label = QLabel("⚪ ESP32: Aguardando...")
+        self.esp32_status_label.setStyleSheet(
+            "padding: 5px; font-size: 10pt; color: #95a5a6;"
+        )
+        init_status_layout.addWidget(self.esp32_status_label)
 
         init_status_layout.addStretch()
         layout.addLayout(init_status_layout)
@@ -934,17 +941,19 @@ class MainWindow(QWidget):
         status_text = "🟢 ONLINE" if connected else "🔴 OFFLINE"
         logger.info(f"Mudança de status do dispositivo {device_id}: {status_text}")
 
-        # Atualizar UI com status do dispositivo
+        # Atualizar UI com status do ESP32
         if connected:
-            self.mqtt_status_label.setText(f"🟢 ESP32: Conectado")
-            self.mqtt_status_label.setStyleSheet(
-                "padding: 5px; font-size: 10pt; color: #27ae60;"
+            self.esp32_status_label.setText(f"🟢 ESP32: Conectado ({device_id})")
+            self.esp32_status_label.setStyleSheet(
+                "padding: 5px; font-size: 10pt; color: #27ae60; font-weight: bold;"
             )
+            self.esp32_status_label.setToolTip(f"Dispositivo {device_id} está online e enviando heartbeats")
         else:
-            self.mqtt_status_label.setText(f"🔴 ESP32: Desconectado")
-            self.mqtt_status_label.setStyleSheet(
-                "padding: 5px; font-size: 10pt; color: #e74c3c;"
+            self.esp32_status_label.setText(f"🔴 ESP32: Desconectado ({device_id})")
+            self.esp32_status_label.setStyleSheet(
+                "padding: 5px; font-size: 10pt; color: #e74c3c; font-weight: bold;"
             )
+            self.esp32_status_label.setToolTip(f"Dispositivo {device_id} está offline ou não responde")
             # Se dispositivo ficou offline durante análise, pausar
             if self._analysis_running:
                 logger.warning("Dispositivo ESP32 offline durante análise!")
@@ -1065,11 +1074,17 @@ class MainWindow(QWidget):
         # logger.debug(f"Worker status update: {event} - {data}")
 
         if event == "connected":
-            logger.info(" Conexão MQTT estabelecida pelo AsyncWorker")
+            logger.info("✅ Conexão MQTT estabelecida pelo AsyncWorker")
             self.mqtt_status_label.setText("🟢 MQTT: Conectado")
             self.mqtt_status_label.setStyleSheet(
                 "padding: 5px; font-size: 10pt; color: #27ae60;"
             )
+            # Atualizar status do ESP32 para "aguardando" APENAS se ainda estiver no estado inicial
+            if "Aguardando..." in self.esp32_status_label.text() or "⚪" in self.esp32_status_label.text():
+                self.esp32_status_label.setText("🟡 ESP32: Aguardando conexão...")
+                self.esp32_status_label.setStyleSheet(
+                    "padding: 5px; font-size: 10pt; color: #f39c12;"
+                )
 
         elif event == "connection_error":
             error_msg = data.get("error", "Erro desconhecido")
