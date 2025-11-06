@@ -1171,7 +1171,7 @@ class MainWindow(QWidget):
             
             # Atualiza status com cor diferente baseado na conexão do ESP32
             if device_connected:
-                self.status_label.setText("Analisando (ESP32 OK)")
+                self.status_label.setText("Analisando (ESP32 ON)")
                 self.status_label.setStyleSheet(
                     "font-size: 14pt; font-weight: bold; color: #27ae60; padding: 15px;"
                 )
