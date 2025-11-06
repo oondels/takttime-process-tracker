@@ -1206,6 +1206,9 @@ class AsyncWorker(QThread):
                     self.status_update.emit({"event": event_name, **payload})
 
                 logger.info("Estabelecendo conexão MQTT")
+                tracker = None
+                stopper = None
+
                 try:
                     # Carregar configuração
                     cfg = load_config()
@@ -1254,9 +1257,13 @@ class AsyncWorker(QThread):
                             )
                         )
 
+                    else:
+                        logger.error("Falha ao conectar ao broker MQTT")
+                        on_event("connection_error", {"error": "Falha ao conectar ao broker MQTT"})
+                        return
                 except Exception as e:
                     logger.error(
-                        f"✗ Erro ao estabelecer conexão MQTT: {e}", exc_info=True
+                        f"Erro ao estabelecer conexão MQTT: {e}", exc_info=True
                     )
                     on_event("connection_error", {"error": str(e)})
                     return
@@ -1264,7 +1271,8 @@ class AsyncWorker(QThread):
                 async def stop_waiter():
                     await self._stop.wait()
                     # Cancel the tracker when stop requested
-                    tracker.cancel()
+                    if tracker:
+                        tracker.cancel()
 
                 # If stop was requested before loop started, trigger it now
                 if self._pre_stop:
@@ -1278,14 +1286,14 @@ class AsyncWorker(QThread):
 
                 finally:
                     # Ensure tracker is cancelled and awaited
-                    if not tracker.done():
+                    if tracker and not tracker.done():
                         tracker.cancel()
                         try:
                             await tracker
                         except asyncio.CancelledError:
                             pass
                     # Cancel stopper too
-                    if not stopper.done():
+                    if stopper and not stopper.done():
                         stopper.cancel()
                         try:
                             await stopper
