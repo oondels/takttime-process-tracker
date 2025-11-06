@@ -112,7 +112,15 @@ def preprocess_for_ocr(roi_bgr):
     return th
 
 
-def extract_takt_message(roi) -> Optional[dict]:
+def extract_takt_message(roi, last_yolo_detection_time) -> Optional[dict]:
+    now = time.time()
+    
+    if last_yolo_detection_time is not None and (now - last_yolo_detection_time) < 5:
+        logger.debug(f"OCR em cooldown ({now - last_yolo_detection_time:.2f}s desde última execução)")
+        return None
+    
+    
+    last_yolo_detection_time = time.time()
     tess_config = (
         r"--oem 3 "  # LSTM OCR engine
         r"-c tessedit_char_whitelist=0123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZ "
@@ -124,7 +132,7 @@ def extract_takt_message(roi) -> Optional[dict]:
         .strip()
     )
 
-    # logger.debug(f"Texto extraído por OCR: '{text}'")
+    logger.debug(f"Texto extraído por OCR: '{text}'")
 
     if "00:00:00" in text:
         logger.info("Padrão '00:00:00' detectado - Takt concluído!")
@@ -218,6 +226,7 @@ async def main(
 
     logger.info("Iniciando loop principal de detecção...")
     iteration = 0
+    last_yolo_detection_time = None
 
     while True:
         try:
@@ -242,7 +251,14 @@ async def main(
                         continue
 
                     processed_roi = preprocess_for_ocr(roi)
-                    extracted_text = extract_takt_message(processed_roi)
+                    ocr_result = extract_takt_message(processed_roi, last_yolo_detection_time)
+
+                    if ocr_result is not None:
+                        extracted_text = ocr_result
+                        last_yolo_detection_time = ocr_result.get("ocr_time", time.time())
+                        break
+                if extracted_text:  # Se já encontrou, não precisa processar mais boxes
+                    break
 
             # Detecta o fim da etapa de um takt
             if extracted_text:
@@ -285,6 +301,7 @@ async def main(
 
                 # Trata detecção de conclusão de takt (00:00:00)
                 if event_type == "takt":
+                    logger.debug(f"===> Takt detectado em {now:.3f}")
                     # Debounce mais robusto
                     if last_sent_message is not None and (now - last_message_time) <= 20:
                         logger.debug(
@@ -292,6 +309,8 @@ async def main(
                         )
                         await asyncio.sleep(0.5)
                         continue
+                        
+                    logger.debug(f"✅ Passou pelo debounce em {now:.3f}")
 
                     # ===== VERIFICAÇÃO DE CONEXÃO DO ESP32 =====
                     # Verifica se o dispositivo ESP32 está conectado antes de enviar
@@ -307,7 +326,7 @@ async def main(
                     # Só envia se o dispositivo estiver conectado
                     if not is_device_connected:
                         logger.warning(
-                            f"ESP32 ({DEVICE_ID_ACTUAL}) NÃO está conectado! "
+                            f"ESP32 desconectado em {now:.3f} - aguardando conexão.. "
                             f"Mensagem de takt NÃO será enviada."
                         )
                         
