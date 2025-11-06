@@ -206,6 +206,13 @@ async def main(
 
     model = YOLO(MODEL_PATH)
     logger.info("Modelo YOLO carregado com sucesso!")
+    
+    # Aquecimento do modelo para melhor performance
+    logger.info("Aquecendo modelo YOLO...")
+    dummy_frame = np.zeros((640, 480, 3), dtype=np.uint8)
+    _ = model.predict(source=dummy_frame, conf=0.15, verbose=False)
+    logger.info("Modelo aquecido e pronto!")
+    
     if on_event:
         on_event("model_loaded", {"model_path": MODEL_PATH})
 
@@ -229,8 +236,17 @@ async def main(
 
             # Fazer a predição no frame atual
             results = model.predict(
-                source=frame, stream=False, conf=0.15, verbose=False
+                source=frame, 
+                stream=False, 
+                conf=0.15, 
+                verbose=False,
+                imgsz=640  # Otimização: tamanho menor para processamento mais rápido
             )
+
+            # Early exit: se não houver detecções, continua loop
+            if len(results[0].boxes) == 0:
+                await asyncio.sleep(0.1)
+                continue
 
             extracted_text = None
             for result in results:
@@ -442,7 +458,8 @@ async def main(
                         logger.info("🔄 Resetando contador de takt para 0")
                         takt_tracker_count = 0
 
-            await asyncio.sleep(0.5)
+            # Sleep adaptativo: menor quando detecta algo, maior quando não
+            await asyncio.sleep(0.1 if extracted_text else 0.3)
 
         except Exception as e:
             logger.error(
