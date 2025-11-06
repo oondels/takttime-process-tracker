@@ -225,6 +225,11 @@ class MQTTManager:
         device = self.devices.get(device_id)
         return device.connected if device else False
 
+    @property
+    def device_status(self) -> Dict[str, bool]:
+        """Retorna dicionário com status de conexão de todos os dispositivos"""
+        return {device_id: device.connected for device_id, device in self.devices.items()}
+
     def get_device_info(self, device_id: str) -> Optional[dict]:
         """Retorna informações do dispositivo"""
         device = self.devices.get(device_id)

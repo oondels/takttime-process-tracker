@@ -297,8 +297,12 @@ async def main(
                     # Verifica se o dispositivo ESP32 está conectado antes de enviar
                     is_device_connected = False
                     if is_mqtt_manager and hasattr(connection, 'device_status'):
-                        is_device_connected = connection.device_status.get(DEVICE_ID_ACTUAL, False)
-                        logger.debug(f"Status de conexão do dispositivo {DEVICE_ID_ACTUAL}: {is_device_connected}")
+                        device_status_dict = connection.device_status
+                        is_device_connected = device_status_dict.get(DEVICE_ID_ACTUAL, False)
+                        logger.debug(f"📊 device_status completo: {device_status_dict}")
+                        logger.debug(f"✓ Status de conexão do dispositivo {DEVICE_ID_ACTUAL}: {is_device_connected}")
+                    else:
+                        logger.error("❌ connection.device_status não disponível!")
                     
                     # Só envia se o dispositivo estiver conectado
                     if not is_device_connected:
