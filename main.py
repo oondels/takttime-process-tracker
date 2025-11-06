@@ -80,47 +80,38 @@ ROUTING_KEY = f"takt.device.cost-{DEVICE_ID}"
 pytesseract.pytesseract.tesseract_cmd = r"/usr/bin/tesseract"
 MODEL_PATH = tech_config.get("model_path") or "./train_2025.pt"
 
-# logger.info(f"=== Configuração Inicial ===")
-# logger.info(f"DEVICE_ID: {DEVICE_ID}")
-# logger.info(f"ROUTING_KEY: {ROUTING_KEY}")
-# logger.info(f"MODEL_PATH: {MODEL_PATH}")
-# logger.info(f"==========================")
-
 
 def extract_roi(frame, box, pad=5, scale=2):
+    """Extrai ROI da imagem com padding e escala para melhorar OCR."""
     x1, y1, x2, y2 = map(int, box)
-    # logger.debug(f"Extraindo ROI - Box original: ({x1}, {y1}, {x2}, {y2})")
 
-    # add padding, clamp to image bounds
+    # Adiciona padding, limitado aos bounds da imagem
     x1, y1 = max(x1 - pad, 0), max(y1 - pad, 0)
     x2, y2 = min(x2 + pad, frame.shape[1]), min(y2 + pad, frame.shape[0])
 
-    # logger.debug(f"ROI com padding: ({x1}, {y1}, {x2}, {y2})")
-
     roi = frame[y1:y2, x1:x2]
-    # upscale to improve tiny text
+    # Escala para melhorar reconhecimento de texto pequeno
     h, w = roi.shape[:2]
     scaled_roi = cv2.resize(roi, (w * scale, h * scale), interpolation=cv2.INTER_CUBIC)
-    # logger.debug(f"ROI redimensionada de {w}x{h} para {w*scale}x{h*scale}")
     return scaled_roi
 
 
 def preprocess_for_ocr(roi_bgr):
+    """Pré-processa ROI para melhorar qualidade do OCR."""
     gray = cv2.cvtColor(roi_bgr, cv2.COLOR_BGR2GRAY)
     gray = cv2.bilateralFilter(gray, d=9, sigmaColor=75, sigmaSpace=75)
     _, th = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
     return th
 
 
-def extract_takt_message(roi, last_yolo_detection_time) -> Optional[dict]:
-    now = time.time()
+def extract_takt_message(roi) -> Optional[dict]:
+    """
+    Extrai e reconhece texto da ROI usando OCR.
     
-    if last_yolo_detection_time is not None and (now - last_yolo_detection_time) < 5:
-        logger.debug(f"OCR em cooldown ({now - last_yolo_detection_time:.2f}s desde última execução)")
-        return None
-    
-    
-    last_yolo_detection_time = time.time()
+    Returns:
+        dict: {'event': 'takt'/'takt_screen', 'message': str} com resultado do OCR
+        None: se OCR falhar
+    """
     tess_config = (
         r"--oem 3 "  # LSTM OCR engine
         r"-c tessedit_char_whitelist=0123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZ "
@@ -138,7 +129,6 @@ def extract_takt_message(roi, last_yolo_detection_time) -> Optional[dict]:
         logger.info("Padrão '00:00:00' detectado - Takt concluído!")
         return {"event": "takt", "message": "Takt detectado"}
     else:
-        # logger.debug("Tela de takt aberta (sem conclusão de etapa)")
         return {"event": "takt_screen", "message": "Takt Aberto"}
 
 
@@ -226,7 +216,6 @@ async def main(
 
     logger.info("Iniciando loop principal de detecção...")
     iteration = 0
-    last_yolo_detection_time = None
 
     while True:
         try:
@@ -251,13 +240,11 @@ async def main(
                         continue
 
                     processed_roi = preprocess_for_ocr(roi)
-                    ocr_result = extract_takt_message(processed_roi, last_yolo_detection_time)
+                    extracted_text = extract_takt_message(processed_roi)
 
-                    if ocr_result is not None:
-                        extracted_text = ocr_result
-                        last_yolo_detection_time = ocr_result.get("ocr_time", time.time())
+                    if extracted_text is not None:
                         break
-                if extracted_text:  # Se já encontrou, não precisa processar mais boxes
+                if extracted_text:
                     break
 
             # Detecta o fim da etapa de um takt
@@ -273,17 +260,12 @@ async def main(
 
                 event_type = extracted_text.get("event")
 
-                # logger.debug(
-                #     f"[DEBUG] extracted_text: {extracted_text}, on_event: {on_event is not None}, event_type: {event_type}"
-                # )
-
                 # Trata reconhecimento de tela da takt aberto (sem reconhecer fim de takt) - Faz check a cada 5 segundos
                 if event_type == "takt_screen":
                     if (
                         last_takt_screen_check is None
                         or (now - last_takt_screen_check) > 5
                     ):
-                        # logger.info("Tela de takt detectada (sem conclusão)")
                         if on_event:
                             try:
                                 on_event(
