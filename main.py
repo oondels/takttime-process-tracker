@@ -80,12 +80,11 @@ ROUTING_KEY = f"takt.device.cost-{DEVICE_ID}"
 pytesseract.pytesseract.tesseract_cmd = r"/usr/bin/tesseract"
 MODEL_PATH = tech_config.get("model_path") or "./train_2025.pt"
 
-logger.info(f"=== Configuração Inicial ===")
-logger.info(f"AMQP_URL: {AMQP_URL}")
-logger.info(f"DEVICE_ID: {DEVICE_ID}")
-logger.info(f"ROUTING_KEY: {ROUTING_KEY}")
-logger.info(f"MODEL_PATH: {MODEL_PATH}")
-logger.info(f"==========================")
+# logger.info(f"=== Configuração Inicial ===")
+# logger.info(f"DEVICE_ID: {DEVICE_ID}")
+# logger.info(f"ROUTING_KEY: {ROUTING_KEY}")
+# logger.info(f"MODEL_PATH: {MODEL_PATH}")
+# logger.info(f"==========================")
 
 
 def extract_roi(frame, box, pad=5, scale=2):
