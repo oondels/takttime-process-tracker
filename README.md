@@ -2,7 +2,7 @@
 
 Sistema distribuído para monitoramento de linha de produção baseado em **Takt-Time**, utilizando visão computacional e comunicação MQTT para sinalização física em tempo real.
 
-## 📋 Índice
+## Índice
 
 - [Visão Geral](#-visão-geral)
 - [Arquitetura do Sistema](#-arquitetura-do-sistema)
@@ -13,7 +13,7 @@ Sistema distribuído para monitoramento de linha de produção baseado em **Takt
 - [Uso](#-uso)
 - [Tecnologias](#-tecnologias)
 
-## 🎯 Visão Geral
+## Visão Geral
 
 O sistema detecta automaticamente eventos de **Takt-Time** (padrão `00:00:00`) em telas de produção usando:
 
@@ -66,7 +66,7 @@ graph TB
     BROKER -->|Telemetry| MQTT_PY
 ```
 
-## 🔄 Fluxo de Dados
+## Fluxo de Dados
 
 ### Fluxo Completo de Detecção
 
