@@ -244,66 +244,91 @@ async def main(
                     extracted_text = extract_takt_message(processed_roi)
 
             # Detecta o fim da etapa de um takt
-            if extracted_text and on_event:
+            if extracted_text:
+                # Validação adicional da estrutura
+                if not isinstance(extracted_text, dict) or "event" not in extracted_text:
+                    logger.error(
+                        f"Estrutura inválida de extracted_text: {extracted_text}"
+                    )
+                    continue
+
                 now = time.time()
+                event_type = extracted_text.get("event")
+
+                logger.debug(
+                    f"[DEBUG] extracted_text: {extracted_text}, on_event: {on_event is not None}, event_type: {event_type}"
+                )
 
                 # Trata reconhecimento de tela da takt aberto (sem reconhecer fim de takt) - Faz check a cada 5 segundos
-                if (
-                    isinstance(extracted_text, dict)
-                    and extracted_text.get("event") == "takt_screen"
-                ):
+                if event_type == "takt_screen":
                     if (
                         last_takt_screen_check is None
                         or (now - last_takt_screen_check) > 5
                     ):
-                        # Notifica a UI que a tela de takt está aberta
-                        on_event(
-                            "takt_screen_detected",
-                            {"message": extracted_text.get("message")},
-                        )
+                        logger.info("Tela de takt detectada (sem conclusão)")
+                        if on_event:
+                            try:
+                                on_event(
+                                    "takt_screen_detected",
+                                    {"message": extracted_text.get("message")},
+                                )
+                            except Exception as e:
+                                logger.error(
+                                    f"Erro ao chamar on_event para takt_screen: {e}",
+                                    exc_info=True,
+                                )
                         last_takt_screen_check = now
                     await asyncio.sleep(0.5)
                     continue
 
-                if last_sent_message is None or (time.time() - last_message_time > 2):
+                # Trata detecção de conclusão de takt (00:00:00)
+                if event_type == "takt":
+                    # Debounce mais robusto
+                    if last_sent_message is not None and (now - last_message_time) <= 2:
+                        logger.debug(
+                            f"Mensagem ignorada (debounce ativo - {now - last_message_time:.2f}s desde última)"
+                        )
+                        await asyncio.sleep(0.5)
+                        continue
+
+                    logger.info("=" * 60)
+                    logger.info("EVENTO TAKT CONFIRMADO - Processando...")
+                    logger.info(f"Tempo desde última mensagem: {(now - last_message_time) if last_message_time else 'N/A'}")
+                    logger.info("=" * 60)
+
                     last_sent_message = extracted_text
                     last_message_time = now
+                    last_takt_screen_check = now  # Reset do check de tela
 
                     # Atualiza o contador de detecções
                     takt_tracker_count = update_takt_count(takt_tracker_count)
-                    logger.info(f"Contador de takt atualizado: {takt_tracker_count}/3")
+                    logger.info(
+                        f"📊 Contador de takt atualizado: {takt_tracker_count}/3"
+                    )
 
-                    match takt_tracker_count:
-                        case 1:
-                            print("\n")
-                            logger.info(">>> Primeira detecção de Takt (1/3)")
-                            on_event(
-                                "takt_detected",
-                                {
-                                    "takt": takt_tracker_count,
-                                },
-                            )
+                    # Notifica a UI baseado no contador
+                    try:
+                        if on_event:
+                            match takt_tracker_count:
+                                case 1:
+                                    logger.info(">>> 🟢 Primeira detecção de Takt (1/3)")
+                                    on_event("takt_detected", {"takt": takt_tracker_count})
 
-                        case 2:
-                            print("\n")
-                            logger.info(">>> Segunda detecção de Takt (2/3)")
-                            on_event(
-                                "takt_detected",
-                                {
-                                    "takt": takt_tracker_count,
-                                },
-                            )
-                        case 3:
-                            print("\n")
-                            logger.info(
-                                ">>> Terceira detecção de Takt (3/3) - Talão completo!"
-                            )
-                            on_event(
-                                "takt_detected",
-                                {
-                                    "takt": takt_tracker_count,
-                                },
-                            )
+                                case 2:
+                                    logger.info(">>> 🟡 Segunda detecção de Takt (2/3)")
+                                    on_event("takt_detected", {"takt": takt_tracker_count})
+
+                                case 3:
+                                    logger.info(
+                                        ">>> 🔴 Terceira detecção de Takt (3/3) - Talão completo!"
+                                    )
+                                    on_event("takt_detected", {"takt": takt_tracker_count})
+                        else:
+                            logger.warning("⚠️ on_event callback não está definido!")
+                    except Exception as e:
+                        logger.error(
+                            f"❌ Erro ao notificar UI via on_event: {e}", exc_info=True
+                        )
 
                     # Envia a mensagem via MQTT
                     timestamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
@@ -312,34 +337,67 @@ async def main(
                     extracted_text.update({"takt_count": takt_tracker_count})
 
                     if is_mqtt_manager:
-                        success = connection.publish_command(
-                            DEVICE_ID_ACTUAL, extracted_text, qos=1
-                        )
-                        if success:
-                            logger.info(
-                                f"Mensagem enviada via MQTT: {extracted_text}"
+                        try:
+                            logger.info(f"📤 Enviando comando MQTT: {extracted_text}")
+                            success = connection.publish_command(
+                                DEVICE_ID_ACTUAL, extracted_text, qos=1
+                            )
+                            if success:
+                                logger.info(
+                                    f"✅ Mensagem enviada via MQTT: {extracted_text}"
+                                )
+                                if on_event:
+                                    try:
+                                        on_event("message_sent", extracted_text)
+                                    except Exception as e:
+                                        logger.error(
+                                            f"Erro no callback message_sent: {e}",
+                                            exc_info=True,
+                                        )
+                            else:
+                                logger.error("❌ Falha ao enviar mensagem via MQTT (publish retornou False)")
+                                if on_event:
+                                    try:
+                                        on_event(
+                                            "message_error",
+                                            {"error": "Falha no publish MQTT"},
+                                        )
+                                    except Exception as e:
+                                        logger.error(
+                                            f"Erro no callback message_error: {e}",
+                                            exc_info=True,
+                                        )
+                        except Exception as e:
+                            logger.error(
+                                f"❌ Exceção ao publicar MQTT: {e}", exc_info=True
                             )
                             if on_event:
-                                on_event("message_sent", extracted_text)
-                        else:
-                            logger.error("Falha ao enviar mensagem via MQTT")
-                            if on_event:
-                                on_event("message_error", {"error": "Falha no publish"})
+                                try:
+                                    on_event("message_error", {"error": str(e)})
+                                except Exception as inner_e:
+                                    logger.error(
+                                        f"Erro no callback de erro: {inner_e}",
+                                        exc_info=True,
+                                    )
+                    else:
+                        logger.error("❌ MQTTManager não disponível!")
 
+                    # Reset do contador após takt 3
                     if takt_tracker_count >= 3:
-                        # reseta contador
+                        logger.info("🔄 Resetando contador de takt para 0")
                         takt_tracker_count = 0
-                else:
-                    logger.debug("Mensagem ignorada (debounce de 2s ativo)")
-                    continue
 
             await asyncio.sleep(0.5)
+
         except Exception as e:
             logger.error(
                 f"✗ Erro durante a execução do loop principal: {e}", exc_info=True
             )
             if on_event:
-                on_event("runtime_error", {"error": str(e)})
+                try:
+                    on_event("runtime_error", {"error": str(e)})
+                except Exception as inner_e:
+                    logger.error(f"Erro no callback de erro: {inner_e}", exc_info=True)
             await asyncio.sleep(2)
 
 
