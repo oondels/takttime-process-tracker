@@ -555,13 +555,17 @@ class MainWindow(QWidget):
         # Estado da tela Takt e timeout
         self.takt_screen_working = False
         self.last_takt_screen_check = None
-        self.takt_timeout_sec = 6
+        self.takt_timeout_sec = 40 # Tempo maximo sem resposta antes de considerar inativa
         self.last_takt_time_count = 0
 
         # Estado de inicialização e segurança
         self._model_loaded = False
         self._mqtt_connected = False
         self._initialization_thread = None
+        
+        # Controle de aviso de dispositivo desconectado (evita spam)
+        self._last_device_warning_time = None
+        self._device_warning_cooldown = 30  # segundos entre avisos
 
         logger.debug("Construindo interface gráfica...")
         self._build_ui()
@@ -1160,9 +1164,23 @@ class MainWindow(QWidget):
 
         elif event == "takt_detected":
             takt_number = data.get("takt", self.last_takt_time_count)
-            logger.info(f"Takt detectado! Etapa: {takt_number}/3")
+            device_connected = data.get("device_connected", False)
+            
+            logger.info(f"Takt detectado! Etapa: {takt_number}/3 (ESP32: {'conectado' if device_connected else 'desconectado'})")
             self.takt_screen_working = True
-            self.status_label.setText("Analisando")
+            
+            # Atualiza status com cor diferente baseado na conexão do ESP32
+            if device_connected:
+                self.status_label.setText("Analisando (ESP32 OK)")
+                self.status_label.setStyleSheet(
+                    "font-size: 14pt; font-weight: bold; color: #27ae60; padding: 15px;"
+                )
+            else:
+                self.status_label.setText("Analisando (ESP32 OFF)")
+                self.status_label.setStyleSheet(
+                    "font-size: 14pt; font-weight: bold; color: #f39c12; padding: 15px;"
+                )
+            
             self.last_takt_screen_check = time.monotonic()
             # Atualiza o status da label takt (UI)
             self.last_takt_time_count = takt_number
@@ -1180,11 +1198,79 @@ class MainWindow(QWidget):
                 # Reinicia o timer para 3 segundos
                 self._takt_reset_timer.start(3000)
 
+        elif event == "device_disconnected":
+            device_id = data.get("device_id", "")
+            message = data.get("message", "")
+            takt_detected = data.get("takt_detected", False)
+            
+            logger.warning(f"{message}")
+            
+            if takt_detected:
+                self.status_label.setText(
+                    f"Takt detectado mas ESP32 desconectado!"
+                )
+                self.status_label.setStyleSheet(
+                    "font-size: 14pt; font-weight: bold; color: #f39c12; padding: 15px;"
+                )
+                
+                # Verifica cooldown antes de mostrar dialog (evita spam)
+                current_time = time.time()
+                should_show_warning = False
+                
+                if self._last_device_warning_time is None:
+                    # Primeira vez, mostra
+                    should_show_warning = True
+                elif (current_time - self._last_device_warning_time) >= self._device_warning_cooldown:
+                    # Já passou tempo suficiente desde último aviso
+                    should_show_warning = True
+                else:
+                    # Ainda em cooldown
+                    time_remaining = self._device_warning_cooldown - (current_time - self._last_device_warning_time)
+                    logger.debug(
+                        f"Aviso de dispositivo desconectado em cooldown. "
+                        f"Próximo aviso em {time_remaining:.0f}s"
+                    )
+                
+                if should_show_warning:
+                    self._last_device_warning_time = current_time
+                    # Exibe notificação visual não-bloqueante
+                    QTimer.singleShot(0, lambda: self._show_device_disconnected_warning(device_id))
+
     def _reset_takt_counter(self):
         """Reseta o contador de takt tanto na UI quanto na variável interna"""
         logger.info("Resetando contador de takt para 0")
         self.last_takt_time_count = 0
         self.status_takt.setText("0")
+
+    def _show_device_disconnected_warning(self, device_id: str):
+        """Exibe aviso de dispositivo desconectado sem bloquear a UI"""
+        msg = QMessageBox(self)
+        msg.setIcon(QMessageBox.Warning)
+        msg.setWindowTitle("ESP32 Desconectado")
+        msg.setText(f"Dispositivo ESP32 não está conectado!")
+        msg.setInformativeText(
+            f"Dispositivo: {device_id}\n\n"
+            f"Um takt foi detectado, mas a mensagem NÃO foi enviada "
+            f"porque o ESP32 não está conectado ao broker MQTT.\n\n"
+            f"Verifique:\n"
+            f"• ESP32 está ligado?\n"
+            f"• Está conectado ao WiFi?\n"
+            f"• Consegue acessar o broker MQTT?\n"
+            f"• Está enviando heartbeats?\n\n"
+            f"A análise continuará rodando."
+        )
+        msg.setStandardButtons(QMessageBox.Ok)
+        msg.setStyleSheet(
+            """
+            QMessageBox {
+                background-color: #fff3cd;
+            }
+            QLabel {
+                color: #856404;
+            }
+        """
+        )
+        msg.exec_()
 
     def _check_takt_screen_status(self):
         # Desativa se passou do limite
@@ -1196,7 +1282,6 @@ class MainWindow(QWidget):
                 logger.warning(
                     f"Timeout! Tela de takt offline há {elapsed:.1f} segundos (limite: {self.takt_timeout_sec}s)"
                 )
-                print("Tempo máximo de Tela Takt offline alcançado!")
                 self.takt_screen_working = False
                 self._analysis_running = False
                 self.status_label.setText("Takt Fechado!")

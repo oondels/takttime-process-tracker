@@ -90,22 +90,38 @@ sequenceDiagram
         OCR-->>Desktop: Texto extraído
         
         alt Padrão "00:00:00" detectado
-            Desktop->>Desktop: Incrementar takt_count (1→2→3)
-            Desktop->>MQTT: Publicar JSON (QoS 1)
-            Note over Desktop,MQTT: {"event":"takt","takt_count":2}
+            Desktop->>Desktop: Verificar status ESP32
             
-            MQTT->>ESP32: Encaminhar comando
-            ESP32->>ESP32: Parse JSON (ArduinoJson)
-            ESP32->>LEDs: Acionar nível correspondente
+            alt ESP32 Conectado (device_status[id]==True)
+                Desktop->>Desktop: Incrementar takt_count (1→2→3)
+                Desktop->>MQTT: Publicar JSON (QoS 1)
+                Note over Desktop,MQTT: {"event":"takt","takt_count":2}
+                
+                MQTT->>ESP32: Encaminhar comando
+                ESP32->>ESP32: Parse JSON (ArduinoJson)
+                ESP32->>LEDs: Acionar nível correspondente
+                
+                alt takt_count == 3
+                    Desktop->>Desktop: Agendar reset (3s)
+                    Desktop->>Desktop: takt_count = 0
+                end
+            else ESP32 Desconectado
+                Desktop->>Desktop: ⚠️ Bloquear envio
+                Desktop->>Desktop: Log warning
+                
+                alt Cooldown expirado (>30s)
+                    Desktop->>Desktop: Mostrar aviso na UI
+                    Note over Desktop: Dialog não-bloqueante
+                else Cooldown ativo (<30s)
+                    Desktop->>Desktop: Skip notificação (apenas log)
+                end
+            end
             
             ESP32-->>MQTT: Heartbeat (a cada 30s)
             MQTT-->>Desktop: Atualizar status UI
+            Note over Desktop: 🟢 ESP32 Online / 🔴 Offline
             
-            alt takt_count == 3
-                Desktop->>Desktop: Agendar reset (3s)
-                Desktop->>Desktop: takt_count = 0
-            end
-        else Timeout > 6s
+        else Timeout > 40s
             Desktop->>Desktop: Marcar tela offline
             Desktop->>Desktop: Pausar análise
         end
@@ -169,11 +185,14 @@ Pattern Matching: "00:00:00"
 ```
 
 **Otimizações Implementadas:**
+
 - **Bilateral Filter**: Reduz ruído preservando bordas
 - **Otsu Threshold**: Binarização adaptativa automática
 - **Upscaling 2x**: Melhora legibilidade de textos pequenos
 - **Confidence 0.15**: Detecta até regiões com baixa certeza
 - **Debounce 2s**: Evita mensagens MQTT duplicadas
+- **Verificação ESP32**: Checa conexão antes de enviar (economiza banda)
+- **Cooldown de Avisos**: 30s entre notificações (previne spam de dialogs)
 
 ### 2. Sistema MQTT
 
@@ -344,10 +363,43 @@ const char *MQTT_SERVER = "broker-host-or-ip";
 | Estado | Descrição |
 |--------|-----------|
 | 🟢 **Takt Detectado** | Tela takt visível e sendo analisada |
-| 🔴 **Tela Offline** | Timeout >6s sem detecção |
+| 🔴 **Tela Offline** | Timeout >40s sem detecção |
 | 🟡 **Aguardando** | Sistema pronto, aguardando tela |
-| 🔌 **ESP32 Conectado** | Dispositivo respondendo heartbeat |
+| � **ESP32 Conectado** | Dispositivo respondendo heartbeat |
 | 🔴 **ESP32 Desconectado** | Sem heartbeat ou status offline |
+| ⚠️ **ESP32 OFF (Takt OK)** | Takt detectado mas mensagem não enviada |
+
+### Comportamento de Proteção
+
+**Sistema de Verificação de Conexão:**
+
+```
+Takt Detectado
+    ↓
+Verificar device_status[ESP32_ID]
+    ↓
+┌─────────────────────┐
+│   ESP32 Conectado?  │
+└──────┬──────────┬───┘
+       │          │
+      SIM        NÃO
+       │          │
+       ↓          ↓
+  Enviar MQTT   Bloquear
+  ✅ Sucesso    ⚠️ Skip
+       │          │
+       └──────────┘
+            ↓
+    Análise Continua
+```
+
+**Sistema de Cooldown de Avisos:**
+
+- **Primeira detecção com ESP32 OFF**: Mostra dialog de aviso
+- **Detecções subsequentes < 30s**: Apenas log (silencioso)
+- **Após 30 segundos**: Mostra novo aviso se problema persistir
+- **Interface permanece responsiva**: Dialogs não-bloqueantes
+- **Análise continua rodando**: Não interrompe o monitoramento
 
 ### Logs
 
@@ -374,18 +426,24 @@ const char *MQTT_SERVER = "broker-host-or-ip";
 
 - **Detecção**: ~500ms por frame (depende da GPU)
 - **Heartbeat ESP32**: 30s (reduz overhead de rede)
-- **Debounce MQTT**: 2s (evita spam)
+- **Debounce MQTT**: 2s (evita spam de comandos)
+- **Cooldown de Avisos**: 30s (previne dialogs repetitivos)
 - **Buffer MQTT**: 512 bytes (suficiente para JSON)
-- **Timeout takt**: 6s (balanceado para falsos negativos)
-- **QoS Comandos**: 1 (at least once)
-- **QoS Heartbeat**: 0 (at most once)
+- **Timeout takt**: 40s (balanceado para falsos negativos)
+- **Verificação ESP32**: Tempo real via device_status (sem overhead)
+- **QoS Comandos**: 1 (at least once - garantia de entrega)
+- **QoS Heartbeat**: 0 (at most once - telemetria)
 
-## Segurança
+## Segurança e Confiabilidade
 
 - Configurações técnicas protegidas por autenticação
 - Credenciais MQTT armazenadas em `config.json`
 - Comunicação MQTT sem TLS (ambiente interno)
 - LWT garante detecção de desconexões
+- **Verificação de conexão antes de enviar** (economiza banda)
+- **Sistema de cooldown** (previne spam de avisos)
+- **Reconexão automática** do MQTT em caso de queda
+- **Validação de device_status** em tempo real
 
 ## Troubleshooting
 
@@ -400,10 +458,39 @@ const char *MQTT_SERVER = "broker-host-or-ip";
 1. Verificar credenciais WiFi
 2. Testar conectividade: `ping broker-host-or-ip`
 3. Monitor serial: `pio device monitor`
+4. Verificar se heartbeat está sendo enviado (a cada 30s)
+5. Checar Last Will Testament (LWT) no broker
 
 ### MQTT não comunica
 
 1. Verificar broker rodando: `sudo systemctl status mosquitto`
 2. Testar com mosquitto_pub/sub
 3. Verificar firewall: porta 1883
+4. Checar credenciais no `config.json`
+
+### Mensagens não são enviadas
+
+1. **Verificar status do ESP32 na UI**: 🟢 = Conectado / 🔴 = Desconectado
+2. **Logs**: Buscar por `"ESP32 NÃO está conectado"` em `main_debug.log`
+3. **Heartbeat**: ESP32 deve enviar heartbeat a cada 30s
+4. **device_status**: Verificar se `connection.device_status[id]` está `True`
+5. **Last Will Testament**: Confirmar se ESP32 publicou status "online"
+
+### Spam de avisos de ESP32 desconectado
+
+**Problema resolvido na v2.0+**
+
+- Sistema implementa cooldown de 30s entre avisos
+- Apenas 1 dialog mostrado a cada 30 segundos
+- Logs continuam registrando todas as tentativas
+- UI permanece responsiva durante problema
+
+### Timeout de tela aumentado
+
+O timeout padrão foi aumentado de 6s para 40s para:
+
+- Reduzir falsos positivos
+- Permitir momentos de transição na tela
+- Melhorar estabilidade do sistema
+- Evitar interrupções desnecessárias
 
