@@ -255,9 +255,9 @@ async def main(
                 now = time.time()
                 event_type = extracted_text.get("event")
 
-                logger.debug(
-                    f"[DEBUG] extracted_text: {extracted_text}, on_event: {on_event is not None}, event_type: {event_type}"
-                )
+                # logger.debug(
+                #     f"[DEBUG] extracted_text: {extracted_text}, on_event: {on_event is not None}, event_type: {event_type}"
+                # )
 
                 # Trata reconhecimento de tela da takt aberto (sem reconhecer fim de takt) - Faz check a cada 5 segundos
                 if event_type == "takt_screen":
@@ -265,7 +265,7 @@ async def main(
                         last_takt_screen_check is None
                         or (now - last_takt_screen_check) > 5
                     ):
-                        logger.info("Tela de takt detectada (sem conclusão)")
+                        # logger.info("Tela de takt detectada (sem conclusão)")
                         if on_event:
                             try:
                                 on_event(
@@ -284,7 +284,7 @@ async def main(
                 # Trata detecção de conclusão de takt (00:00:00)
                 if event_type == "takt":
                     # Debounce mais robusto
-                    if last_sent_message is not None and (now - last_message_time) <= 2:
+                    if last_sent_message is not None and (now - last_message_time) <= 20:
                         logger.debug(
                             f"Mensagem ignorada (debounce ativo - {now - last_message_time:.2f}s desde última)"
                         )
