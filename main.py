@@ -245,6 +245,8 @@ async def main(
 
             # Detecta o fim da etapa de um takt
             if extracted_text:
+                now = time.time()
+                
                 # Validação adicional da estrutura
                 if not isinstance(extracted_text, dict) or "event" not in extracted_text:
                     logger.error(
@@ -252,7 +254,6 @@ async def main(
                     )
                     continue
 
-                now = time.time()
                 event_type = extracted_text.get("event")
 
                 # logger.debug(
@@ -291,8 +292,37 @@ async def main(
                         await asyncio.sleep(0.5)
                         continue
 
+                    # ===== VERIFICAÇÃO DE CONEXÃO DO ESP32 =====
+                    # Verifica se o dispositivo ESP32 está conectado antes de enviar
+                    is_device_connected = False
+                    if is_mqtt_manager and hasattr(connection, 'device_status'):
+                        is_device_connected = connection.device_status.get(DEVICE_ID_ACTUAL, False)
+                        logger.debug(f"Status de conexão do dispositivo {DEVICE_ID_ACTUAL}: {is_device_connected}")
+                    
+                    # Só envia se o dispositivo estiver conectado
+                    if not is_device_connected:
+                        logger.warning(
+                            f"ESP32 ({DEVICE_ID_ACTUAL}) NÃO está conectado! "
+                            f"Mensagem de takt NÃO será enviada."
+                        )
+                        
+                        # Notifica a UI sobre o dispositivo desconectado
+                        if on_event:
+                            on_event("device_disconnected", {
+                                "device_id": DEVICE_ID_ACTUAL,
+                                "message": "ESP32 desconectado - mensagem não enviada",
+                                "takt_detected": True
+                            })
+                        
+                        # Aguarda um tempo antes de verificar novamente
+                        last_message_time = now
+                        await asyncio.sleep(2)
+                        continue
+
+                    # ===== DISPOSITIVO CONECTADO - PROCESSAR TAKT =====
                     logger.info("=" * 60)
                     logger.info("EVENTO TAKT CONFIRMADO - Processando...")
+                    logger.info(f"ESP32 ({DEVICE_ID_ACTUAL}) conectado!")
                     logger.info(f"Tempo desde última mensagem: {(now - last_message_time) if last_message_time else 'N/A'}")
                     logger.info("=" * 60)
 
@@ -312,17 +342,26 @@ async def main(
                             match takt_tracker_count:
                                 case 1:
                                     logger.info(">>> 🟢 Primeira detecção de Takt (1/3)")
-                                    on_event("takt_detected", {"takt": takt_tracker_count})
+                                    on_event("takt_detected", {
+                                        "takt": takt_tracker_count,
+                                        "device_connected": True
+                                    })
 
                                 case 2:
                                     logger.info(">>> 🟡 Segunda detecção de Takt (2/3)")
-                                    on_event("takt_detected", {"takt": takt_tracker_count})
+                                    on_event("takt_detected", {
+                                        "takt": takt_tracker_count,
+                                        "device_connected": True
+                                    })
 
                                 case 3:
                                     logger.info(
                                         ">>> 🔴 Terceira detecção de Takt (3/3) - Talão completo!"
                                     )
-                                    on_event("takt_detected", {"takt": takt_tracker_count})
+                                    on_event("takt_detected", {
+                                        "takt": takt_tracker_count,
+                                        "device_connected": True
+                                    })
                         else:
                             logger.warning("⚠️ on_event callback não está definido!")
                     except Exception as e:
