@@ -834,7 +834,7 @@ class MainWindow(QWidget):
         """Verifica se modelo e MQTT estão disponíveis antes de habilitar análise"""
         logger.info("=== Iniciando verificação de pré-requisitos ===")
         self.start_stop_btn.setEnabled(False)
-        self.start_stop_btn.setText("⏳ Verificando Sistema...")
+        self.start_stop_btn.setText("Verificando Sistema...")
 
         # Atualiza status visual
         self.model_status_label.setText("🟡 Modelo: Verificando...")
@@ -878,7 +878,7 @@ class MainWindow(QWidget):
                 "padding: 5px; font-size: 10pt; color: #27ae60;"
             )
 
-        elif event == "model_error":
+        elif event == "model_error" and not self._model_loaded:
             self._model_loaded = False
             error_msg = data.get("error", "Erro desconhecido")
             logger.error(f"✗ Erro ao carregar modelo: {error_msg}")
@@ -913,10 +913,23 @@ class MainWindow(QWidget):
             self.mqtt_status_label.setStyleSheet(
                 "padding: 5px; font-size: 10pt; color: #e74c3c;"
             )
+            
+            # Mensagem de erro mais detalhada
+            cfg = load_config()
+            tech = cfg.get("tech", {})
+            mqtt_host = tech.get("mqtt_host", "não configurado")
+            
             QMessageBox.warning(
                 self,
                 "Erro na Conexão MQTT",
-                f"Falha ao conectar ao MQTT:\n{error_msg}\n\nVerifique as configurações de rede e MQTT.",
+                f"Falha ao conectar ao broker MQTT:\n\n"
+                f"Host: {mqtt_host}\n"
+                f"Erro: {error_msg}\n\n"
+                f"Verifique:\n"
+                f"• Se o broker MQTT está rodando\n"
+                f"• Se o endereço está correto nas configurações\n"
+                f"• Se há conectividade de rede\n\n"
+                f"Configure corretamente antes de iniciar a análise.",
             )
 
         # Habilita botão apenas se ambos estiverem OK
@@ -1093,13 +1106,48 @@ class MainWindow(QWidget):
             self.mqtt_status_label.setStyleSheet(
                 "padding: 5px; font-size: 10pt; color: #e74c3c;"
             )
-            # Para a análise automaticamente
-            self._analysis_running = False
-            self.on_start_stop()  # Volta ao estado parado
+            # Para a análise ANTES de mostrar o dialog para evitar loop
+            if self._analysis_running:
+                logger.warning("Parando análise devido a erro na conexão MQTT")
+                self._analysis_running = False
+                self.start_stop_btn.setText("▶️ Iniciar Análise")
+                self.start_stop_btn.setStyleSheet(
+                    """
+                    QPushButton {
+                        background-color: #27ae60;
+                        color: white;
+                        padding: 10px 20px;
+                        border: none;
+                        border-radius: 5px;
+                        font-weight: bold;
+                        font-size: 11pt;
+                    }
+                    QPushButton:hover {
+                        background-color: #229954;
+                    }
+                    QPushButton:pressed {
+                        background-color: #1e8449;
+                    }
+                    QPushButton:disabled {
+                        background-color: #95a5a6;
+                    }
+                """
+                )
+                self.status_label.setText("⏸️ Parado - Erro MQTT")
+                self.status_label.setStyleSheet(
+                    "font-size: 14pt; font-weight: bold; color: #e74c3c; padding: 15px;"
+                )
+                self.configure_btn.setEnabled(True)
+                # Para o worker thread
+                if self._worker_thread and self._worker_thread.isRunning():
+                    logger.debug("Parando AsyncWorker thread devido a erro MQTT")
+                    self._worker_thread.stop()
+            
+            # Mostra o erro apenas uma vez
             QMessageBox.critical(
                 self,
-                "Erro na Conexão",
-                f"Falha ao conectar ao MQTT:\n{error_msg}\n\nA análise foi interrompida.",
+                "Erro na Conexão MQTT",
+                f"Falha ao conectar ao broker MQTT:\n{error_msg}\n\nVerifique:\n• Se o broker está rodando\n• Se o endereço está correto\n• Se há conectividade de rede\n\nA análise foi interrompida.",
             )
             return
 
@@ -1367,11 +1415,55 @@ class InitializationWorker(QThread):
             self.status_update.emit({"event": "model_error", "error": str(e)})
             return  # Para aqui se modelo falhar
 
+        # 2. Verificar Conexão MQTT
         self.status_update.emit({"event": "mqtt_check_start"})
-        # Simula sucesso para permitir inicialização
-        self.status_update.emit(
-            {"event": "mqtt_connected", "url": "Será testado ao iniciar"}
-        )
+
+        try:
+            cfg = load_config()
+            tech_config = cfg.get("tech", {})
+            mqtt_host = tech_config.get("mqtt_host", "").strip()
+            mqtt_user = tech_config.get("mqtt_user", "").strip()
+            mqtt_pass = tech_config.get("mqtt_pass", "").strip()
+
+            # Se não houver configuração MQTT, avisa mas permite continuar
+            if not mqtt_host:
+                logger.warning("Configuração MQTT não definida")
+                self.status_update.emit(
+                    {
+                        "event": "mqtt_error",
+                        "error": "Host MQTT não configurado. Configure nas configurações técnicas.",
+                    }
+                )
+                return
+
+            logger.debug(f"Testando conexão MQTT com: {mqtt_host}")
+            
+            # Testa conexão MQTT de verdade
+            from mqtt_manager import MQTTManager
+
+            test_mqtt = MQTTManager(
+                broker=mqtt_host,
+                port=1883,
+                username=mqtt_user,
+                password=mqtt_pass,
+                timeout_seconds=10,
+            )
+
+            # Tenta conectar com timeout reduzido
+            if test_mqtt.connect(timeout=5):
+                logger.info(f"Conexão MQTT estabelecida com sucesso: {mqtt_host}")
+                self.status_update.emit(
+                    {"event": "mqtt_connected", "url": f"{mqtt_host}:1883"}
+                )
+                test_mqtt.disconnect()
+            else:
+                raise ConnectionError("Falha ao conectar ao broker MQTT")
+
+        except Exception as e:
+            logger.error(f"Erro ao verificar conexão MQTT: {e}", exc_info=True)
+            self.status_update.emit({"event": "mqtt_error", "error": str(e)})
+            return
+
         logger.info("=== InitializationWorker: Verificações concluídas com sucesso ===")
 
 
