@@ -555,7 +555,7 @@ class MainWindow(QWidget):
         # Estado da tela Takt e timeout
         self.takt_screen_working = False
         self.last_takt_screen_check = None
-        self.takt_timeout_sec = 6
+        self.takt_timeout_sec = 40 # Tempo maximo sem resposta antes de considerar inativa
         self.last_takt_time_count = 0
 
         # Estado de inicialização e segurança
@@ -1196,7 +1196,6 @@ class MainWindow(QWidget):
                 logger.warning(
                     f"Timeout! Tela de takt offline há {elapsed:.1f} segundos (limite: {self.takt_timeout_sec}s)"
                 )
-                print("Tempo máximo de Tela Takt offline alcançado!")
                 self.takt_screen_working = False
                 self._analysis_running = False
                 self.status_label.setText("Takt Fechado!")
