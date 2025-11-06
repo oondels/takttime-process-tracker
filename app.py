@@ -562,6 +562,10 @@ class MainWindow(QWidget):
         self._model_loaded = False
         self._mqtt_connected = False
         self._initialization_thread = None
+        
+        # Controle de aviso de dispositivo desconectado (evita spam)
+        self._last_device_warning_time = None
+        self._device_warning_cooldown = 30  # segundos entre avisos
 
         logger.debug("Construindo interface gráfica...")
         self._build_ui()
@@ -1209,8 +1213,28 @@ class MainWindow(QWidget):
                     "font-size: 14pt; font-weight: bold; color: #f39c12; padding: 15px;"
                 )
                 
-                # Exibe notificação visual não-bloqueante
-                QTimer.singleShot(0, lambda: self._show_device_disconnected_warning(device_id))
+                # Verifica cooldown antes de mostrar dialog (evita spam)
+                current_time = time.time()
+                should_show_warning = False
+                
+                if self._last_device_warning_time is None:
+                    # Primeira vez, mostra
+                    should_show_warning = True
+                elif (current_time - self._last_device_warning_time) >= self._device_warning_cooldown:
+                    # Já passou tempo suficiente desde último aviso
+                    should_show_warning = True
+                else:
+                    # Ainda em cooldown
+                    time_remaining = self._device_warning_cooldown - (current_time - self._last_device_warning_time)
+                    logger.debug(
+                        f"Aviso de dispositivo desconectado em cooldown. "
+                        f"Próximo aviso em {time_remaining:.0f}s"
+                    )
+                
+                if should_show_warning:
+                    self._last_device_warning_time = current_time
+                    # Exibe notificação visual não-bloqueante
+                    QTimer.singleShot(0, lambda: self._show_device_disconnected_warning(device_id))
 
     def _reset_takt_counter(self):
         """Reseta o contador de takt tanto na UI quanto na variável interna"""

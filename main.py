@@ -214,6 +214,7 @@ async def main(
     last_message_time = None
     last_sent_message = None
     last_takt_screen_check = None
+    last_device_warning_time = None  # Controle de aviso de dispositivo desconectado
 
     logger.info("Iniciando loop principal de detecção...")
     iteration = 0
@@ -306,13 +307,23 @@ async def main(
                             f"Mensagem de takt NÃO será enviada."
                         )
                         
-                        # Notifica a UI sobre o dispositivo desconectado
-                        if on_event:
+                        # Notifica a UI sobre o dispositivo desconectado (com cooldown de 30s)
+                        should_notify = False
+                        if last_device_warning_time is None:
+                            should_notify = True
+                        elif (now - last_device_warning_time) >= 30:  # 30 segundos de cooldown
+                            should_notify = True
+                        
+                        if should_notify and on_event:
+                            last_device_warning_time = now
                             on_event("device_disconnected", {
                                 "device_id": DEVICE_ID_ACTUAL,
                                 "message": "ESP32 desconectado - mensagem não enviada",
                                 "takt_detected": True
                             })
+                            logger.info("Evento 'device_disconnected' enviado para UI")
+                        else:
+                            logger.debug(f"Aviso de dispositivo desconectado em cooldown (última notificação há {now - last_device_warning_time:.1f}s)")
                         
                         # Aguarda um tempo antes de verificar novamente
                         last_message_time = now
