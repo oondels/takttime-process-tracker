@@ -13,9 +13,8 @@ build/
 *.cache
 
 # Logs
+logs/
 *.log
-app_debug.log
-main_debug.log
 
 # IDE
 .vscode/
