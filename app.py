@@ -27,11 +27,15 @@ import re
 from mqtt_manager import MQTTManager
 
 
+# Garantir que a pasta de logs existe
+LOGS_DIR = os.path.join(os.path.dirname(__file__), "logs")
+os.makedirs(LOGS_DIR, exist_ok=True)
+
 # Configuração de logging detalhado
 logging.basicConfig(
     level=logging.DEBUG,
     format="%(asctime)s - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s",
-    handlers=[logging.FileHandler("app_debug.log"), logging.StreamHandler()],
+    handlers=[logging.FileHandler(os.path.join(LOGS_DIR, "app_debug.log")), logging.StreamHandler()],
 )
 logger = logging.getLogger(__name__)
 
@@ -1001,6 +1005,38 @@ class MainWindow(QWidget):
         init_status_layout.addWidget(self.esp32_status_label)
 
         init_status_layout.addStretch()
+        
+        # Botão de reconectar ao broker MQTT
+        self.reconnect_mqtt_btn = QPushButton("🔄 Reconectar MQTT")
+        self.reconnect_mqtt_btn.setFixedHeight(30)
+        self.reconnect_mqtt_btn.setStyleSheet(
+            """
+            QPushButton {
+                background-color: #3498db;
+                color: white;
+                padding: 5px 15px;
+                border: none;
+                border-radius: 4px;
+                font-weight: bold;
+                font-size: 9pt;
+            }
+            QPushButton:hover {
+                background-color: #2980b9;
+            }
+            QPushButton:pressed {
+                background-color: #21618c;
+            }
+            QPushButton:disabled {
+                background-color: #bdc3c7;
+                color: #7f8c8d;
+            }
+        """
+        )
+        self.reconnect_mqtt_btn.setEnabled(False)  # Desabilitado inicialmente
+        self.reconnect_mqtt_btn.setToolTip("Reconectar ao broker MQTT (disponível apenas quando desconectado)")
+        self.reconnect_mqtt_btn.clicked.connect(self.on_reconnect_mqtt)
+        init_status_layout.addWidget(self.reconnect_mqtt_btn)
+        
         layout.addLayout(init_status_layout)
 
         self.setLayout(layout)
@@ -1159,6 +1195,37 @@ class MainWindow(QWidget):
                 f"Erro ao enviar comando de reset ao ESP32:\n{e}"
             )
 
+    def on_reconnect_mqtt(self):
+        """Tenta reconectar ao broker MQTT"""
+        logger.info("=== Tentando reconectar ao broker MQTT ===")
+        
+        # Desabilita o botão durante a tentativa de reconexão
+        self.reconnect_mqtt_btn.setEnabled(False)
+        self.reconnect_mqtt_btn.setText("🔄 Conectando...")
+        
+        # Atualiza status visual
+        self.mqtt_status_label.setText("🟡 MQTT: Reconectando...")
+        self.mqtt_status_label.setStyleSheet(
+            "padding: 5px; font-size: 10pt; color: #f39c12;"
+        )
+        
+        # Inicia thread de reconexão
+        if (
+            self._initialization_thread is None
+            or not self._initialization_thread.isRunning()
+        ):
+            logger.debug("Iniciando InitializationWorker thread para reconexão MQTT")
+            self._initialization_thread = InitializationWorker(self, check_model=False)
+            self._initialization_thread.status_update.connect(
+                self._on_initialization_update
+            )
+            self._initialization_thread.start()
+        else:
+            logger.warning("InitializationWorker thread já está em execução")
+            # Reabilita o botão se não conseguiu iniciar a thread
+            self.reconnect_mqtt_btn.setEnabled(True)
+            self.reconnect_mqtt_btn.setText("🔄 Reconectar MQTT")
+
     def _check_prerequisites(self):
         """Verifica se modelo e MQTT estão disponíveis antes de habilitar análise"""
         logger.info("=== Iniciando verificação de pré-requisitos ===")
@@ -1233,6 +1300,11 @@ class MainWindow(QWidget):
             self.mqtt_status_label.setStyleSheet(
                 "padding: 5px; font-size: 10pt; color: #27ae60;"
             )
+            
+            # Desabilita o botão de reconexão quando conectado
+            self.reconnect_mqtt_btn.setEnabled(False)
+            self.reconnect_mqtt_btn.setText("🔄 Reconectar MQTT")
+            self.reconnect_mqtt_btn.setToolTip("Reconectar ao broker MQTT (disponível apenas quando desconectado)")
 
         elif event == "mqtt_error":
             self._mqtt_connected = False
@@ -1242,6 +1314,11 @@ class MainWindow(QWidget):
             self.mqtt_status_label.setStyleSheet(
                 "padding: 5px; font-size: 10pt; color: #e74c3c;"
             )
+            
+            # Habilita o botão de reconexão quando desconectado
+            self.reconnect_mqtt_btn.setEnabled(True)
+            self.reconnect_mqtt_btn.setText("🔄 Reconectar MQTT")
+            self.reconnect_mqtt_btn.setToolTip("Clique para tentar reconectar ao broker MQTT")
             
             # Mensagem de erro mais detalhada
             cfg = load_config()
@@ -1258,7 +1335,7 @@ class MainWindow(QWidget):
                 f"• Se o broker MQTT está rodando\n"
                 f"• Se o endereço está correto nas configurações\n"
                 f"• Se há conectividade de rede\n\n"
-                f"Configure corretamente antes de iniciar a análise.",
+                f"Configure corretamente ou use o botão 'Reconectar MQTT'.",
             )
 
         # Habilita botão apenas se ambos estiverem OK
@@ -1421,6 +1498,12 @@ class MainWindow(QWidget):
             self.mqtt_status_label.setStyleSheet(
                 "padding: 5px; font-size: 10pt; color: #27ae60;"
             )
+            
+            # Desabilita o botão de reconexão quando conectado
+            self.reconnect_mqtt_btn.setEnabled(False)
+            self.reconnect_mqtt_btn.setText("🔄 Reconectar MQTT")
+            self.reconnect_mqtt_btn.setToolTip("Reconectar ao broker MQTT (disponível apenas quando desconectado)")
+            
             # Atualizar status do ESP32 para "aguardando" APENAS se ainda estiver no estado inicial
             if "Aguardando..." in self.esp32_status_label.text() or "⚪" in self.esp32_status_label.text():
                 self.esp32_status_label.setText("🟡 ESP32: Aguardando conexão...")
@@ -1435,6 +1518,12 @@ class MainWindow(QWidget):
             self.mqtt_status_label.setStyleSheet(
                 "padding: 5px; font-size: 10pt; color: #e74c3c;"
             )
+            
+            # Habilita o botão de reconexão
+            self.reconnect_mqtt_btn.setEnabled(True)
+            self.reconnect_mqtt_btn.setText("🔄 Reconectar MQTT")
+            self.reconnect_mqtt_btn.setToolTip("Clique para tentar reconectar ao broker MQTT")
+            
             # Para a análise ANTES de mostrar o dialog para evitar loop
             if self._analysis_running:
                 logger.warning("Parando análise devido a erro na conexão MQTT")
@@ -1476,7 +1565,7 @@ class MainWindow(QWidget):
             QMessageBox.critical(
                 self,
                 "Erro na Conexão MQTT",
-                f"Falha ao conectar ao broker MQTT:\n{error_msg}\n\nVerifique:\n• Se o broker está rodando\n• Se o endereço está correto\n• Se há conectividade de rede\n\nA análise foi interrompida.",
+                f"Falha ao conectar ao broker MQTT:\n{error_msg}\n\nVerifique:\n• Se o broker está rodando\n• Se o endereço está correto\n• Se há conectividade de rede\n\nA análise foi interrompida.\n\nUse o botão 'Reconectar MQTT' para tentar novamente.",
             )
             return
 
@@ -1787,9 +1876,10 @@ class InitializationWorker(QThread):
 
     status_update = pyqtSignal(dict)
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, check_model=True):
         super().__init__(parent)
-        logger.debug("InitializationWorker criado")
+        self.check_model = check_model
+        logger.debug(f"InitializationWorker criado (check_model={check_model})")
 
     def run(self):
         """Verifica se modelo YOLO e conexão MQTT estão disponíveis"""
@@ -1797,33 +1887,36 @@ class InitializationWorker(QThread):
 
         logger.info("=== InitializationWorker: Iniciando verificações ===")
 
-        # 1. Verificar Modelo YOLO
-        self.status_update.emit({"event": "model_check_start"})
+        # 1. Verificar Modelo YOLO (apenas se check_model=True)
+        if self.check_model:
+            self.status_update.emit({"event": "model_check_start"})
 
-        try:
-            cfg = load_config()
-            tech_config = cfg.get("tech", {})
-            model_path = tech_config.get("model_path", "./train_2025.pt")
+            try:
+                cfg = load_config()
+                tech_config = cfg.get("tech", {})
+                model_path = tech_config.get("model_path", "./train_2025.pt")
 
-            logger.debug(f"Verificando modelo em: {model_path}")
-            # Verifica se arquivo existe
-            if not os.path.exists(model_path):
-                raise FileNotFoundError(f"Modelo não encontrado em: {model_path}")
+                logger.debug(f"Verificando modelo em: {model_path}")
+                # Verifica se arquivo existe
+                if not os.path.exists(model_path):
+                    raise FileNotFoundError(f"Modelo não encontrado em: {model_path}")
 
-            logger.debug("Arquivo do modelo encontrado, tentando carregar...")
-            # Tenta carregar o modelo
-            from ultralytics import YOLO
+                logger.debug("Arquivo do modelo encontrado, tentando carregar...")
+                # Tenta carregar o modelo
+                from ultralytics import YOLO
 
-            model = YOLO(model_path)
+                model = YOLO(model_path)
 
-            # Modelo carregado com sucesso
-            self.status_update.emit({"event": "model_loaded", "path": model_path})
-            del model  # Libera memória
+                # Modelo carregado com sucesso
+                self.status_update.emit({"event": "model_loaded", "path": model_path})
+                del model  # Libera memória
 
-        except Exception as e:
-            logger.error(f"Erro ao verificar/carregar modelo: {e}", exc_info=True)
-            self.status_update.emit({"event": "model_error", "error": str(e)})
-            return  # Para aqui se modelo falhar
+            except Exception as e:
+                logger.error(f"Erro ao verificar/carregar modelo: {e}", exc_info=True)
+                self.status_update.emit({"event": "model_error", "error": str(e)})
+                return  # Para aqui se modelo falhar
+        else:
+            logger.debug("Verificação de modelo pulada (check_model=False)")
 
         # 2. Verificar Conexão MQTT
         self.status_update.emit({"event": "mqtt_check_start"})
