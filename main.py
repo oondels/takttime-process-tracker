@@ -31,11 +31,15 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Garantir que a pasta de logs existe
+LOGS_DIR = os.path.join(os.path.dirname(__file__), "logs")
+os.makedirs(LOGS_DIR, exist_ok=True)
+
 # Configuração de logging detalhado
 logging.basicConfig(
     level=logging.DEBUG,
     format="%(asctime)s - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s",
-    handlers=[logging.FileHandler("main_debug.log"), logging.StreamHandler()],
+    handlers=[logging.FileHandler(os.path.join(LOGS_DIR, "main_debug.log")), logging.StreamHandler()],
 )
 logger = logging.getLogger(__name__)
 
