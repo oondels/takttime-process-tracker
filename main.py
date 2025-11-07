@@ -1,4 +1,21 @@
 import os
+import sys
+
+# Fix para PyInstaller: adiciona metadados ausentes do aio_pika
+if getattr(sys, 'frozen', False):
+    # Rodando no executável compilado
+    import importlib.metadata
+    
+    # Adiciona metadados fakes se não existirem
+    try:
+        importlib.metadata.version('aio-pika')
+    except importlib.metadata.PackageNotFoundError:
+        # Cria um mock básico dos metadados
+        import types
+        version_module = types.ModuleType('aio_pika_version')
+        version_module.__version__ = '9.3.0'
+        sys.modules['aio_pika._version'] = version_module
+
 import aio_pika
 import asyncio
 from ultralytics import YOLO
@@ -14,11 +31,15 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Garantir que a pasta de logs existe
+LOGS_DIR = os.path.join(os.path.dirname(__file__), "logs")
+os.makedirs(LOGS_DIR, exist_ok=True)
+
 # Configuração de logging detalhado
 logging.basicConfig(
     level=logging.DEBUG,
     format="%(asctime)s - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s",
-    handlers=[logging.FileHandler("main_debug.log"), logging.StreamHandler()],
+    handlers=[logging.FileHandler(os.path.join(LOGS_DIR, "main_debug.log")), logging.StreamHandler()],
 )
 logger = logging.getLogger(__name__)
 
