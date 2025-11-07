@@ -286,3 +286,29 @@ class MQTTManager:
         self.client.disconnect()
         self._connected = False
         logger.info("Desconectado do broker MQTT")
+
+    def is_connected(self) -> bool:
+        """Verifica se está conectado ao broker"""
+        return self._connected
+    
+    def reconnect(self, timeout: int = 10) -> bool:
+        """Tenta reconectar ao broker MQTT"""
+        logger.info("Tentando reconectar ao broker MQTT...")
+        
+        # Se já está conectado, não precisa reconectar
+        if self._connected:
+            logger.info("Já está conectado ao broker MQTT")
+            return True
+        
+        # Desconecta completamente antes de reconectar
+        try:
+            self.disconnect()
+        except Exception as e:
+            logger.debug(f"Erro ao desconectar antes de reconectar (pode ser normal): {e}")
+        
+        # Aguarda um pouco antes de reconectar
+        import time
+        time.sleep(1)
+        
+        # Tenta conectar novamente
+        return self.connect(timeout=timeout)

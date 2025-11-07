@@ -1,4 +1,21 @@
 import os
+import sys
+
+# Fix para PyInstaller: adiciona metadados ausentes do aio_pika
+if getattr(sys, 'frozen', False):
+    # Rodando no executável compilado
+    import importlib.metadata
+    
+    # Adiciona metadados fakes se não existirem
+    try:
+        importlib.metadata.version('aio-pika')
+    except importlib.metadata.PackageNotFoundError:
+        # Cria um mock básico dos metadados
+        import types
+        version_module = types.ModuleType('aio_pika_version')
+        version_module.__version__ = '9.3.0'
+        sys.modules['aio_pika._version'] = version_module
+
 import aio_pika
 import asyncio
 from ultralytics import YOLO
