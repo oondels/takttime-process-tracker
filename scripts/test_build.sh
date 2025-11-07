@@ -8,8 +8,8 @@ echo "============================================"
 echo ""
 
 # Verifica se o diretório dist existe
-if [ ! -d "../dist/takttime-tracker" ]; then
-    echo "❌ Erro: Diretório ../dist/takttime-tracker não encontrado!"
+if [ ! -d "./dist/takttime-tracker" ]; then
+    echo "❌ Erro: Diretório ./dist/takttime-tracker não encontrado!"
     echo ""
     echo "Por favor, compile o aplicativo primeiro:"
     echo "  cd scripts"
@@ -27,15 +27,15 @@ echo ""
 files_ok=true
 
 # Executável principal
-if [ -f "../dist/takttime-tracker/takttime-tracker" ]; then
+if [ -f "./dist/takttime-tracker/takttime-tracker" ]; then
     echo "  ✅ takttime-tracker (executável)"
     
     # Verifica se é executável
-    if [ -x "../dist/takttime-tracker/takttime-tracker" ]; then
+    if [ -x "./dist/takttime-tracker/takttime-tracker" ]; then
         echo "     ✅ Permissões de execução OK"
     else
         echo "     ⚠️  Sem permissão de execução, corrigindo..."
-        chmod +x ../dist/takttime-tracker/takttime-tracker
+        chmod +x ./dist/takttime-tracker/takttime-tracker
     fi
 else
     echo "  ❌ takttime-tracker (executável) - NÃO ENCONTRADO"
@@ -43,11 +43,11 @@ else
 fi
 
 # Modelo YOLO
-if [ -f "../dist/takttime-tracker/train_2025.pt" ]; then
+if [ -f "./dist/takttime-tracker/train_2025.pt" ]; then
     echo "  ✅ train_2025.pt (modelo YOLO)"
     
     # Verifica tamanho do modelo
-    size=$(du -h ../dist/takttime-tracker/train_2025.pt | cut -f1)
+    size=$(du -h ./dist/takttime-tracker/train_2025.pt | cut -f1)
     echo "     📊 Tamanho: $size"
 else
     echo "  ⚠️  train_2025.pt (modelo YOLO) - NÃO ENCONTRADO"
@@ -55,10 +55,10 @@ else
 fi
 
 # Diretório de configuração
-if [ -d "../dist/takttime-tracker/config" ]; then
+if [ -d "./dist/takttime-tracker/config" ]; then
     echo "  ✅ config/ (diretório)"
     
-    if [ -f "../dist/takttime-tracker/config/config.json" ]; then
+    if [ -f "./dist/takttime-tracker/config/config.json" ]; then
         echo "     ✅ config.json encontrado"
     else
         echo "     ⚠️  config.json não encontrado (será criado na primeira execução)"
@@ -68,7 +68,7 @@ else
 fi
 
 # README
-if [ -f "../dist/takttime-tracker/README.txt" ]; then
+if [ -f "./dist/takttime-tracker/README.txt" ]; then
     echo "  ✅ README.txt"
 else
     echo "  ℹ️  README.txt - Não encontrado"
@@ -108,7 +108,7 @@ if [ "$files_ok" = true ] && [ "$deps_ok" = true ]; then
     echo "✅ Todos os pré-requisitos OK!"
     echo ""
     echo "🚀 Para testar o aplicativo:"
-    echo "   cd ../dist/takttime-tracker/"
+    echo "   cd ./dist/takttime-tracker/"
     echo "   ./takttime-tracker"
     echo ""
     
@@ -120,7 +120,7 @@ if [ "$files_ok" = true ] && [ "$deps_ok" = true ]; then
         echo "🚀 Iniciando aplicativo..."
         echo "============================================"
         echo ""
-        cd ../dist/takttime-tracker/
+        cd ./dist/takttime-tracker/
         ./takttime-tracker
     fi
 else
