@@ -1,10 +1,18 @@
 #!/bin/bash
 
-# Script para compilar o aplicativo com PyInstaller
+# Obtém o diretório do script
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Diretório raiz do projeto (um nível acima de scripts)
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+
+# Muda para o diretório raiz do projeto
+cd "$PROJECT_ROOT"
 
 echo "============================================"
 echo "  Takt-Time Process Tracker - Build Script"
 echo "============================================"
+echo ""
+echo "📂 Diretório do projeto: $PROJECT_ROOT"
 echo ""
 
 # Verifica se PyInstaller está instalado
@@ -23,10 +31,10 @@ fi
 
 # Limpa builds anteriores
 echo "🧹 Limpando builds anteriores..."
-rm -rf ../build/ ../dist/
+rm -rf build/ dist/
 
 # Verifica se o modelo existe
-if [ ! -f "../assets/train_2025.pt" ]; then
+if [ ! -f "assets/train_2025.pt" ]; then
     echo "⚠️  Aviso: Modelo train_2025.pt não encontrado em assets/!"
     echo "   Certifique-se de ter o modelo antes de executar o aplicativo."
 fi
@@ -41,7 +49,7 @@ fi
 # Executa PyInstaller
 echo ""
 echo "🔨 Compilando aplicativo..."
-pyinstaller takttime-tracker.spec --clean
+pyinstaller scripts/takttime-tracker.spec --clean
 
 # Verifica se a compilação foi bem-sucedida
 if [ $? -eq 0 ]; then
@@ -50,14 +58,14 @@ if [ $? -eq 0 ]; then
     echo "✅ Compilação concluída com sucesso!"
     echo "============================================"
     echo ""
-    echo "📁 Executável criado em: ../dist/takttime-tracker/"
+    echo "📁 Executável criado em: dist/takttime-tracker/"
     echo "🚀 Para executar:"
-    echo "   cd ../dist/takttime-tracker"
+    echo "   cd dist/takttime-tracker"
     echo "   ./takttime-tracker"
     echo ""
     
     # Cria arquivo README no diretório de distribuição
-    cat > ../dist/takttime-tracker/README.txt << 'EOF'
+    cat > dist/takttime-tracker/README.txt << 'EOF'
 ===========================================
  Takt-Time Process Tracker
 ===========================================
@@ -94,8 +102,8 @@ if [ $? -eq 0 ]; then
 📝 LOGS:
 ---------
 Os logs são salvos em:
-- app_debug.log (interface gráfica)
-- main_debug.log (detecção de takt)
+- logs/app_debug.log (interface gráfica)
+- logs/main_debug.log (detecção de takt)
 
 
 ❓ PROBLEMAS:
@@ -112,7 +120,32 @@ Para problemas ou dúvidas, contate o suporte técnico.
 
 EOF
     
-    echo "📄 README criado em: ../dist/takttime-tracker/README.txt"
+    echo "📄 README criado em: dist/takttime-tracker/README.txt"
+    echo ""
+    
+    # Copia o ícone para o diretório de distribuição
+    echo "🎨 Copiando ícone..."
+    cp assets/icon.png dist/takttime-tracker/
+    
+    # Cria arquivo .desktop para integração com o Linux
+    cat > dist/takttime-tracker/takttime-tracker.desktop << 'EOF'
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Takt-Time Process Tracker
+Comment=Sistema de Monitoramento de Takt-Time
+Exec=./takttime-tracker
+Icon=icon.png
+Terminal=false
+Categories=Utility;Development;
+EOF
+    
+    echo "🖼️  Ícone e arquivo .desktop criados"
+    echo ""
+    echo "💡 Para adicionar ao menu de aplicativos do Linux:"
+    echo "   1. Copie takttime-tracker.desktop para ~/.local/share/applications/"
+    echo "   2. Edite o campo Exec= com o caminho absoluto do executável"
+    echo "   3. Edite o campo Icon= com o caminho absoluto do ícone"
     echo ""
 else
     echo ""
