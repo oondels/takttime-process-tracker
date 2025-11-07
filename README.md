@@ -447,7 +447,7 @@ Verificar device_status[ESP32_ID]
 
 ### Logs
 
-- **App Desktop**: `app_debug.log` e `main_debug.log`
+- **App Desktop**: `logs/app_debug.log` e `logs/main_debug.log`
 - **ESP32**: Monitor serial PlatformIO
 
 ## Tecnologias
@@ -495,7 +495,7 @@ Verificar device_status[ESP32_ID]
 
 1. Verificar se YOLO está treinado para sua tela
 2. Ajustar confidence threshold em `main.py`
-3. Verificar logs: `main_debug.log`
+3. Verificar logs: `logs/main_debug.log`
 
 ### ESP32 não conecta
 
@@ -515,7 +515,7 @@ Verificar device_status[ESP32_ID]
 ### Mensagens não são enviadas
 
 1. **Verificar status do ESP32 na UI**: 🟢 = Conectado / 🔴 = Desconectado
-2. **Logs**: Buscar por `"ESP32 NÃO está conectado"` em `main_debug.log`
+2. **Logs**: Buscar por `"ESP32 NÃO está conectado"` em `logs/main_debug.log`
 3. **Heartbeat**: ESP32 deve enviar heartbeat a cada 30s
 4. **device_status**: Verificar se `connection.device_status[id]` está `True`
 5. **Last Will Testament**: Confirmar se ESP32 publicou status "online"
