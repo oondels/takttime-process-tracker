@@ -134,8 +134,9 @@ Version=1.0
 Type=Application
 Name=Takt-Time Process Tracker
 Comment=Sistema de Monitoramento de Takt-Time
-Exec=./takttime-tracker
-Icon=icon.png
+Exec=/opt/dass_apps/takttime-process-tracker/dist/takttime-tracker/takttime-tracker
+Path=/opt/dass_apps/takttime-process-tracker/dist/takttime-tracker
+Icon=/opt/dass_apps/takttime-process-tracker/dist/takttime-tracker/icon.png
 Terminal=false
 Categories=Utility;Development;
 EOF
@@ -144,8 +145,9 @@ EOF
     echo ""
     echo "💡 Para adicionar ao menu de aplicativos do Linux:"
     echo "   1. Copie takttime-tracker.desktop para ~/.local/share/applications/"
-    echo "   2. Edite o campo Exec= com o caminho absoluto do executável"
-    echo "   3. Edite o campo Icon= com o caminho absoluto do ícone"
+    echo "   2. Edite o campo Exec= com o caminho absoluto do executável (se necessário)"
+    echo "   3. Edite o campo Icon= com o caminho absoluto do ícone (se necessário)"
+    echo "   4. Rode chmod +x ~/.local/share/applications/takttime-tracker.desktop"
     echo ""
 else
     echo ""
