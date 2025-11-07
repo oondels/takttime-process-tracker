@@ -260,6 +260,30 @@ void processarComando(int comando) {
 - **Tesseract OCR**: 5.x
 - **PlatformIO**: Para ESP32 (opcional)
 
+### Opção 1: Executável Compilado (Recomendado)
+
+Para usuários finais que não precisam modificar o código:
+
+1. **Baixar o executável** do release mais recente
+2. **Extrair o arquivo** `takttime-tracker-linux.tar.gz`:
+   ```bash
+   tar -xzf takttime-tracker-linux.tar.gz
+   cd takttime-tracker/
+   ```
+3. **Instalar Tesseract OCR** (dependência do sistema):
+   ```bash
+   # Ubuntu/Debian
+   sudo apt install tesseract-ocr tesseract-ocr-por -y
+   ```
+4. **Executar**:
+   ```bash
+   ./takttime-tracker
+   ```
+
+### Opção 2: Executar do Código Fonte
+
+Para desenvolvedores ou personalização:
+
 ### Windows
 
 1. **Instalar Tesseract OCR**
@@ -297,6 +321,26 @@ void processarComando(int comando) {
    ```bash
    python app.py
    ```
+
+### Opção 3: Compilar o Executável
+
+Para criar um executável autônomo:
+
+1. **Instalar dependências** (inclui PyInstaller):
+
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+2. **Executar o script de build**:
+
+   ```bash
+   ./build.sh
+   ```
+
+3. **O executável estará em** `dist/takttime-tracker/`
+
+📖 Para instruções detalhadas de compilação, consulte [BUILD_INSTRUCTIONS.md](BUILD_INSTRUCTIONS.md)
 
 ### ESP32 (PlatformIO)
 
@@ -493,4 +537,256 @@ O timeout padrão foi aumentado de 6s para 40s para:
 - Permitir momentos de transição na tela
 - Melhorar estabilidade do sistema
 - Evitar interrupções desnecessárias
+
+---
+
+## 📦 Compilando o Aplicativo
+
+### Estrutura do Projeto
+
+```
+takttime-process-tracker/
+├── app.py                  # Interface gráfica PyQt5
+├── main.py                 # Lógica de detecção de takt
+├── mqtt_manager.py         # Gerenciador MQTT
+├── requirements.txt        # Dependências Python
+├── assets/                 # Recursos do projeto
+│   ├── train_2025.pt      # Modelo YOLO
+│   ├── icon.png           # Ícone do aplicativo
+│   └── icon.ico           # Ícone Windows
+├── scripts/                # Scripts de build
+│   ├── build.sh           # Script de compilação
+│   ├── test_build.sh      # Script de teste
+│   ├── hook-aio_pika.py   # Hook PyInstaller
+│   └── takttime-tracker.spec  # Especificação PyInstaller
+├── config/                 # Configurações
+└── server/                 # Servidor TypeScript (opcional)
+```
+
+### Pré-requisitos para Build
+
+#### Ubuntu/Debian
+
+```bash
+sudo apt update
+sudo apt install -y tesseract-ocr python3-dev build-essential
+```
+
+#### Fedora/RHEL
+
+```bash
+sudo dnf install -y tesseract tesseract-langpack-por python3-devel gcc
+```
+
+### Dependências Python
+
+```bash
+pip install -r requirements.txt
+```
+
+O PyInstaller já está incluído nas dependências.
+
+### Compilar o Executável
+
+#### Método Automático (Recomendado)
+
+```bash
+cd scripts/
+./build.sh
+```
+
+O script irá:
+1. ✅ Verificar se PyInstaller está instalado
+2. ✅ Limpar builds anteriores
+3. ✅ Verificar arquivos necessários (modelo, tesseract)
+4. ✅ Compilar o aplicativo
+5. ✅ Criar README no diretório de distribuição
+
+#### Método Manual
+
+```bash
+cd scripts/
+# Limpar builds anteriores
+rm -rf ../build/ ../dist/
+
+# Compilar com PyInstaller
+pyinstaller takttime-tracker.spec --clean
+```
+
+### Estrutura de Saída
+
+Após a compilação:
+
+```
+dist/takttime-tracker/
+├── takttime-tracker          # Executável principal
+├── train_2025.pt             # Modelo YOLO
+├── config/                   # Configurações
+│   └── config.json          # Criado na primeira execução
+├── README.txt                # Instruções de uso
+└── _internal/                # Bibliotecas Python empacotadas
+    ├── PyQt5/
+    ├── cv2/
+    ├── torch/
+    ├── ultralytics/
+    └── ...
+```
+
+### Executar o Aplicativo Compilado
+
+```bash
+cd ../dist/takttime-tracker/
+./takttime-tracker
+```
+
+### Testar o Build
+
+```bash
+cd scripts/
+./test_build.sh
+```
+
+Este script verifica:
+- ✅ Executável criado e com permissões corretas
+- ✅ Modelo YOLO presente
+- ✅ Diretório de configuração
+- ✅ Dependências do sistema (Tesseract, Qt5)
+
+### Distribuir o Aplicativo
+
+#### Criar Pacote Compactado
+
+```bash
+cd dist/
+tar -czf takttime-tracker-linux-v1.0.tar.gz takttime-tracker/
+```
+
+#### O que Incluir na Distribuição
+
+- ✅ Todo o diretório `takttime-tracker/`
+- ✅ Instruções de instalação do Tesseract
+- ✅ Requisitos de sistema (Linux x86_64)
+- ✅ Configuração inicial necessária
+
+### Personalizações
+
+#### Adicionar Ícone Personalizado
+
+1. **Criar/obter ícone** (256x256px PNG recomendado)
+2. **Salvar em** `assets/icon.png`
+3. **Recompilar** com `./build.sh`
+
+#### Converter PNG para ICO (Windows)
+
+```bash
+convert assets/icon.png -define icon:auto-resize=256,128,64,48,32,16 assets/icon.ico
+```
+
+#### Recursos de Ícones Gratuitos
+
+- [Flaticon](https://www.flaticon.com/) - Procure por "stopwatch", "production", "timer"
+- [Font Awesome](https://fontawesome.com/) - Ícones vetoriais
+- [IconFinder](https://www.iconfinder.com/) - Filtro por licença grátis
+
+#### Sugestões de Design
+
+Para aplicativo de monitoramento de takt-time:
+- **Cores**: Verde (produção), Amarelo (atenção), Vermelho (alerta)
+- **Símbolo**: Cronômetro, engrenagem, linha de produção
+- **Estilo**: Moderno, flat design, alta legibilidade
+
+### Problemas Comuns no Build
+
+#### "ModuleNotFoundError" ao executar
+
+**Causa:** Dependência não incluída automaticamente.
+
+**Solução:** Adicione em `scripts/takttime-tracker.spec`:
+
+```python
+hiddenimports=[
+    # ... existentes ...
+    'modulo_faltante',
+],
+```
+
+#### "FileNotFoundError: train_2025.pt"
+
+**Causa:** Modelo não encontrado.
+
+**Solução:**
+- Verifique se `assets/train_2025.pt` existe
+- Confirme que está listado em `datas` no `.spec`
+
+#### Aplicativo não inicia
+
+**Causa:** Erro sendo suprimido.
+
+**Solução:** Execute no terminal para ver erros:
+
+```bash
+cd dist/takttime-tracker/
+./takttime-tracker
+```
+
+#### Erro: "libQt5Core.so.5: cannot open shared object file"
+
+**Causa:** Bibliotecas Qt não instaladas.
+
+**Solução:**
+
+```bash
+sudo apt install libqt5core5a libqt5gui5 libqt5widgets5
+```
+
+#### Build muito grande
+
+**Soluções:**
+- Use UPX para compressão (já habilitado)
+- Remova dependências não usadas
+- Exclua módulos específicos:
+
+```bash
+pyinstaller takttime-tracker.spec --exclude-module matplotlib
+```
+
+### Tamanho Esperado do Build
+
+- **Executável**: ~500KB
+- **Bibliotecas (_internal/)**: ~1.5-2GB (PyTorch, OpenCV)
+- **Modelo YOLO**: ~6-50MB
+- **Total**: ~1.5-2.5GB
+
+### Compatibilidade
+
+O executável é específico para:
+- **OS**: Linux
+- **Arquitetura**: x86_64 (AMD64)
+- **Distribuição**: Maioria das distribuições modernas
+
+Para outros sistemas:
+- **Windows**: Compile no Windows
+- **macOS**: Compile no macOS
+
+### Otimizações
+
+#### Reduzir Tamanho
+
+```bash
+# Excluir módulos não usados
+pyinstaller takttime-tracker.spec --exclude-module tkinter
+```
+
+#### Modo GUI Puro (sem console)
+
+Edite `scripts/takttime-tracker.spec`:
+
+```python
+console=False,  # Mude para False
+```
+
+**⚠️ Atenção**: Sem console, logs não aparecerão.
+
+---
+
 

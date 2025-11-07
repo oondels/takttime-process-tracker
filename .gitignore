@@ -1,16 +1,40 @@
+# Python
 .venv/
-labelImg/  
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+*.cache
+
+# Logs
+*.log
+app_debug.log
+main_debug.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Environment
+.env*
+
+# Project specific
+labelImg/
 node_modules/
 runs/
 train/
 val/
 dataset/
 utils/
-*.cache
-__pycache__/
-.env*
 
-# Log files
-*.log
-app_debug.log
-main_debug.log
+# Build artifacts
+*.spec.bak
