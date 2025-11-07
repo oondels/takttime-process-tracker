@@ -196,15 +196,29 @@ Pattern Matching: "00:00:00"
 
 ### 2. Sistema MQTT
 
-**Mensagem de Comando (JSON):**
+**Mensagem de Comando Padrão (JSON):**
 
 ```json
 {
   "event": "takt",
   "message": "Takt detectado",
-  "id": "cost-2-2408",
+  "id": "cost-{factory}-{cell}",
   "timestamp": "2025-11-04 14:32:15",
-  "takt_count": 2
+  "takt_count": etapa -> [0,1,2,3]
+}
+```
+
+**Mensagem de Reset Manual (JSON):**
+
+Mensagem enviada quando botão de reset é apertado
+
+```json
+{
+  "event": "takt",
+  "message": "message",
+  "id": "cost-{factory}-{cell}",
+  "timestamp": "2025-11-07T14:32:18.123456",
+  "takt_count": 0
 }
 ```
 
