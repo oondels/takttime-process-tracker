@@ -316,10 +316,64 @@ Para desenvolvedores ou personalização:
 
 ### Linux
 
+#### Preparação do Ambiente
+
+1. **Instalar Git**
+   ```bash
+   sudo apt update
+   sudo apt install git -y
+   ```
+
+2. **Instalar Python 3.12 com pyenv** (recomendado)
+   
+   **Instalar dependências de build:**
+   ```bash
+   sudo apt update
+   sudo apt install -y software-properties-common build-essential curl git \
+     libssl-dev zlib1g-dev libbz2-dev libreadline-dev libsqlite3-dev \
+     libncursesw5-dev xz-utils tk-dev libffi-dev liblzma-dev
+   ```
+
+   **Instalar pyenv:**
+   ```bash
+   curl https://pyenv.run | bash
+   ```
+
+   **Configurar shell (bash/zsh):**
+   ```bash
+   # Para bash
+   echo 'export PYENV_ROOT="$HOME/.pyenv"' >> ~/.bashrc
+   echo 'export PATH="$PYENV_ROOT/bin:$PATH"' >> ~/.bashrc
+   echo 'eval "$(pyenv init --path)"' >> ~/.bashrc
+   echo 'eval "$(pyenv init -)"' >> ~/.bashrc
+   source ~/.bashrc
+   
+   # Para zsh
+   echo 'export PYENV_ROOT="$HOME/.pyenv"' >> ~/.zshrc
+   echo 'export PATH="$PYENV_ROOT/bin:$PATH"' >> ~/.zshrc
+   echo 'eval "$(pyenv init --path)"' >> ~/.zshrc
+   echo 'eval "$(pyenv init -)"' >> ~/.zshrc
+   source ~/.zshrc
+   ```
+
+   **Instalar e configurar Python 3.12:**
+   ```bash
+   pyenv install 3.12.7
+   pyenv global 3.12.7   # ou 'pyenv local 3.12.7' no diretório do projeto
+   python -V  # Verificar versão
+   ```
+
+3. **Criar ambiente virtual**
+   ```bash
+   python3 -m venv .venv
+   source .venv/bin/activate
+   ```
+
+#### Instalação da Aplicação
+
 1. **Instalar Tesseract OCR**
    ```bash
    # Ubuntu/Debian
-   sudo apt update
    sudo apt install tesseract-ocr tesseract-ocr-por -y
    
    # Arch Linux
@@ -328,7 +382,7 @@ Para desenvolvedores ou personalização:
 
 2. **Instalar dependências Python**
    ```bash
-   pip install -r requirements-app.txt
+   pip install -r requirements.txt
    ```
 
 3. **Executar aplicação**
