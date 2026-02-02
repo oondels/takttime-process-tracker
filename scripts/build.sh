@@ -148,6 +148,7 @@ EOF
     echo "   2. Edite o campo Exec= com o caminho absoluto do executável (se necessário)"
     echo "   3. Edite o campo Icon= com o caminho absoluto do ícone (se necessário)"
     echo "   4. Rode chmod +x ~/.local/share/applications/takttime-tracker.desktop"
+    echo "   5. Copie o arquivo train_2025.pt para o mesmo diretório do executável"
     echo ""
 else
     echo ""

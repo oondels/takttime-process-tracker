@@ -1,6 +1,6 @@
 {
   "device": {
-    "cell_number": "2508",
+    "cell_number": "2408",
     "factory": "2",
     "cell_leader": "hendrius"
   },
@@ -12,6 +12,6 @@
     "mqtt_host": "10.100.1.43",
     "mqtt_user": "dass",
     "mqtt_pass": "pHUWphISTl7r_Geis",
-    "model_path": "./train_2025.pt"
+    "model_path": "./assets/train_2025.pt"
   }
 }
