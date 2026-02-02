@@ -58,9 +58,10 @@ if [ $? -eq 0 ]; then
     echo "✅ Compilação concluída com sucesso!"
     echo "============================================"
     echo ""
-    echo "📁 Executável criado em: dist/takttime-tracker/"
-    echo "🚀 Para executar:"
+    echo "Executável criado em: dist/takttime-tracker/"
+    echo "Para executar:"
     echo "   cd dist/takttime-tracker"
+    echo "   chmod +x takttime-tracker"
     echo "   ./takttime-tracker"
     echo ""
     
@@ -70,7 +71,7 @@ if [ $? -eq 0 ]; then
  Takt-Time Process Tracker
 ===========================================
 
-📋 PRÉ-REQUISITOS:
+PRÉ-REQUISITOS:
 ------------------
 1. Tesseract OCR instalado no sistema
    Ubuntu/Debian: sudo apt install tesseract-ocr
@@ -80,12 +81,12 @@ if [ $? -eq 0 ]; then
 3. Arquivo config/config.json com as configurações
 
 
-🚀 COMO EXECUTAR:
+COMO EXECUTAR:
 ------------------
 ./takttime-tracker
 
 
-⚙️ CONFIGURAÇÃO:
+CONFIGURAÇÃO:
 -----------------
 1. Execute o aplicativo
 2. Clique em "⚙️ Configurar"
@@ -99,14 +100,14 @@ if [ $? -eq 0 ]; then
    - Senha: change-me-before-use
 
 
-📝 LOGS:
+LOGS:
 ---------
 Os logs são salvos em:
 - logs/app_debug.log (interface gráfica)
 - logs/main_debug.log (detecção de takt)
 
 
-❓ PROBLEMAS:
+PROBLEMAS:
 -------------
 - Erro no modelo: Verifique se train_2025.pt existe
 - Erro MQTT: Verifique configurações técnicas e conexão de rede
@@ -120,12 +121,14 @@ Para problemas ou dúvidas, contate o suporte técnico.
 
 EOF
     
-    echo "📄 README criado em: dist/takttime-tracker/README.txt"
+    echo "README criado em: dist/takttime-tracker/README.txt"
     echo ""
     
     # Copia o ícone para o diretório de distribuição
-    echo "🎨 Copiando ícone..."
+    echo "Copiando ícone..."
     cp assets/icon.png dist/takttime-tracker/
+    echo "Copiando modelo YOLO..."
+    cp assets/train_2025.pt dist/takttime-tracker/
     
     # Cria arquivo .desktop para integração com o Linux
     cat > dist/takttime-tracker/takttime-tracker.desktop << 'EOF'
@@ -141,15 +144,16 @@ Terminal=false
 Categories=Utility;Development;
 EOF
     
-    echo "🖼️  Ícone e arquivo .desktop criados"
+    echo "Ícone e arquivo .desktop criados"
     echo ""
-    echo "💡 Para adicionar ao menu de aplicativos do Linux:"
-    echo "   1. Copie takttime-tracker.desktop para ~/.local/share/applications/"
+    echo "Para adicionar ao menu de aplicativos do Linux:"
+    echo "   1. Copie takttime-tracker.desktop para ~/.local/share/applications/ (se necessário)"
     echo "   2. Edite o campo Exec= com o caminho absoluto do executável (se necessário)"
     echo "   3. Edite o campo Icon= com o caminho absoluto do ícone (se necessário)"
     echo "   4. Rode chmod +x ~/.local/share/applications/takttime-tracker.desktop"
     echo "   5. Copie o arquivo train_2025.pt para o mesmo diretório do executável"
     echo ""
+    cp dist/takttime-tracker/takttime-tracker.desktop ~/.local/share/applications/
 else
     echo ""
     echo "============================================"
