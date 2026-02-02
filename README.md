@@ -32,18 +32,19 @@ O sistema detecta automaticamente eventos de **Takt-Time** (padrão `00:00:00`) 
 
 ```mermaid
 graph TB
-    subgraph "Desktop Application"
+
+    subgraph Desktop_Application["Desktop Application"]
         UI[PyQt5 Interface]
         YOLO[YOLO Detector]
         OCR[Tesseract OCR]
         MQTT_PY[MQTT Client Python]
     end
-    
-    subgraph "MQTT Broker"
-        BROKER[RabbitMQ/Mosquitto]
+
+    subgraph MQTT_Broker["MQTT Broker"]
+        BROKER[RabbitMQ / Mosquitto]
     end
-    
-    subgraph "ESP32 Device"
+
+    subgraph ESP32_Device["ESP32 Device"]
         MQTT_ESP[MQTT Client ESP32]
         CTRL[Signalizer Controller]
         LED1[LED 1 - Nível 1]
@@ -51,19 +52,24 @@ graph TB
         LED3[LED 3 - Nível 3]
         BUZZ[Buzzer]
     end
-    
+
     UI --> YOLO
     YOLO --> OCR
     OCR --> MQTT_PY
-    MQTT_PY -->|takt/device/{id}| BROKER
+
+    MQTT_PY -->|"takt/device/{id}"| BROKER
+
     BROKER -->|Commands| MQTT_ESP
+
     MQTT_ESP --> CTRL
     CTRL --> LED1
     CTRL --> LED2
     CTRL --> LED3
     CTRL --> BUZZ
-    MQTT_ESP -->|heartbeat/status| BROKER
+
+    MQTT_ESP -->|"heartbeat/status"| BROKER
     BROKER -->|Telemetry| MQTT_PY
+
 ```
 
 ## Fluxo de Dados
@@ -132,21 +138,22 @@ sequenceDiagram
 
 ```mermaid
 graph LR
-    subgraph "Tópicos MQTT"
-        CMD[takt/device/{id}]
-        STATUS[takt/device/{id}/status]
-        HEART[takt/device/{id}/heartbeat]
+
+    subgraph MQTT_Topics["Tópicos MQTT"]
+        CMD["takt/device/{id}"]
+        STATUS["takt/device/{id}/status"]
+        HEART["takt/device/{id}/heartbeat"]
     end
     
-    PY[Python App] -->|Publish Commands| CMD
-    CMD -->|Subscribe| ESP[ESP32]
+    PY[Python App] -->|"Publish Commands"| CMD
+    CMD -->|"Subscribe"| ESP[ESP32]
     
-    ESP -->|LWT: offline| STATUS
-    ESP -->|Publish: online| STATUS
-    STATUS -->|Subscribe| PY
+    ESP -->|"LWT: offline"| STATUS
+    ESP -->|"Publish: online"| STATUS
+    STATUS -->|"Subscribe"| PY
     
-    ESP -->|Publish Telemetry| HEART
-    HEART -->|Subscribe| PY
+    ESP -->|"Publish Telemetry"| HEART
+    HEART -->|"Subscribe"| PY
 ```
 
 ## Componentes
