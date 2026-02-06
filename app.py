@@ -186,16 +186,16 @@ class ConfigDialog(QDialog):
         device_layout.setSpacing(12)
         device_layout.setContentsMargins(20, 20, 20, 20)
 
-        # self.cell_input = QLineEdit()
-        # self.cell_input.setPlaceholderText("Ex: Célula 01")
-        # self.cell_input.setStyleSheet(input_style)
+        self.cell_input = QLineEdit()
+        self.cell_input.setPlaceholderText("Ex: Célula 01")
+        self.cell_input.setStyleSheet(input_style)
         # cell_label = QLabel("Número da Célula:")
         # cell_label.setStyleSheet(label_style)
         # device_layout.addRow(cell_label, self.cell_input)
 
-        # self.factory_input = QLineEdit()
-        # self.factory_input.setPlaceholderText("Ex: Fábrica Principal")
-        # self.factory_input.setStyleSheet(input_style)
+        self.factory_input = QLineEdit()
+        self.factory_input.setPlaceholderText("Ex: Fábrica Principal")
+        self.factory_input.setStyleSheet(input_style)
         # factory_label = QLabel("Fábrica:")
         # factory_label.setStyleSheet(label_style)
         # device_layout.addRow(factory_label, self.factory_input)
@@ -218,17 +218,17 @@ class ConfigDialog(QDialog):
         network_layout.setSpacing(12)
         network_layout.setContentsMargins(20, 20, 20, 20)
 
-        # self.wifi_ssid_input = QLineEdit()
-        # self.wifi_ssid_input.setPlaceholderText("Ex: RedeWiFi-Producao")
-        # self.wifi_ssid_input.setStyleSheet(input_style)
+        self.wifi_ssid_input = QLineEdit()
+        self.wifi_ssid_input.setPlaceholderText("Ex: RedeWiFi-Producao")
+        self.wifi_ssid_input.setStyleSheet(input_style)
         # ssid_label = QLabel("SSID WiFi:")
         # ssid_label.setStyleSheet(label_style)
         # network_layout.addRow(ssid_label, self.wifi_ssid_input)
 
-        # self.wifi_pass_input = QLineEdit()
-        # self.wifi_pass_input.setPlaceholderText("Senha do WiFi")
-        # self.wifi_pass_input.setEchoMode(QLineEdit.Password)
-        # self.wifi_pass_input.setStyleSheet(input_style)
+        self.wifi_pass_input = QLineEdit()
+        self.wifi_pass_input.setPlaceholderText("Senha do WiFi")
+        self.wifi_pass_input.setEchoMode(QLineEdit.Password)
+        self.wifi_pass_input.setStyleSheet(input_style)
         # pass_label = QLabel("Senha WiFi:")
         # pass_label.setStyleSheet(label_style)
         # network_layout.addRow(pass_label, self.wifi_pass_input)
@@ -474,13 +474,13 @@ class ConfigDialog(QDialog):
         """Valida e salva a configuração"""
         logger.debug("Tentando salvar configuração...")
         # Dispositivo
-        cell = self.cell_input.text().strip()
-        factory = self.factory_input.text().strip()
+        # cell = self.cell_input.text().strip()
+        # factory = self.factory_input.text().strip()
         leader = self.leader_input.text().strip()
 
         # Rede
-        wifi_ssid = self.wifi_ssid_input.text().strip()
-        wifi_pass = self.wifi_pass_input.text().strip()
+        # wifi_ssid = self.wifi_ssid_input.text().strip()
+        # wifi_pass = self.wifi_pass_input.text().strip()
 
         # Técnico
         mqtt_host = self.mqtt_host_input.text().strip()
@@ -488,27 +488,30 @@ class ConfigDialog(QDialog):
         mqtt_pass = self.mqtt_pass_input.text().strip()
         model_path = self.model_path_input.text().strip() or "./train_2025.pt"
 
-        logger.debug(
-            f"Valores do formulário - Cell: {cell}, Factory: {factory}, Leader: {leader}"
-        )
-        logger.debug(
-            f"WiFi SSID: {wifi_ssid}, mqtt Host: {mqtt_host}, Model: {model_path}"
-        )
+        # logger.debug(
+        #     f"Valores do formulário - Cell: {cell}, Factory: {factory}, Leader: {leader}"
+        # )
+        # logger.debug(
+        #     f"WiFi SSID: {wifi_ssid}, mqtt Host: {mqtt_host}, Model: {model_path}"
+        # )
 
         # Validação básica - apenas campos do dispositivo são obrigatórios
-        if not cell or not factory or not leader:
-            logger.warning("Validação falhou: campos obrigatórios vazios")
-            QMessageBox.warning(
-                self,
-                "Campos Obrigatórios",
-                "Por favor, preencha todos os campos do Dispositivo antes de salvar.",
-            )
-            return
+        # if not cell or not factory or not leader:
+        #     logger.warning("Validação falhou: campos obrigatórios vazios")
+        #     QMessageBox.warning(
+        #         self,
+        #         "Campos Obrigatórios",
+        #         "Por favor, preencha todos os campos do Dispositivo antes de salvar.",
+        #     )
+        #     return
 
         # Salvar configuração estruturada
+        config = load_config()
+        device_data = config.get("device", {})
+        wifi_data = config.get("network", {})
         data = {
-            "device": {"cell_number": cell, "factory": factory, "cell_leader": leader},
-            "network": {"wifi_ssid": wifi_ssid, "wifi_pass": wifi_pass},
+            "device": {"cell_number": device_data.get("cell_number", ""), "factory": device_data.get("factory", ""), "cell_leader": leader},
+            "network": {"wifi_ssid": wifi_data.get("wifi_ssid",""), "wifi_pass": wifi_data.get("wifi_pass", "")},
             "tech": {
                 "mqtt_host": mqtt_host,
                 "mqtt_user": mqtt_user,
@@ -659,8 +662,8 @@ class EditTaktDialog(QDialog):
         
         # Calcular device_id atual
         import re
-        factory_num = re.sub(r"\D", "", current_factory) or "0"
-        cell_num = re.sub(r"\D", "", current_cell) or "0"
+        factory_num = current_factory
+        cell_num = current_cell
         current_device_id = f"cost-{factory_num}-{cell_num}"
         
         # Label mostrando device ID atual
@@ -716,6 +719,7 @@ class EditTaktDialog(QDialog):
         """
         )
         # Botão será conectado posteriormente conforme instrução do usuário
+        self.update_connection_btn.clicked.connect(self.update_takt_connection_id)
         update_connection_container.addWidget(self.update_connection_btn)
         update_connection_container.addStretch()
 
@@ -747,7 +751,7 @@ class EditTaktDialog(QDialog):
             }
         """
         )
-        self.edit_takt_stage.clicked.connect(self.on_reset)
+        self.edit_takt_stage.clicked.connect(self.on_edit_stage)
         reset_button_container.addWidget(self.edit_takt_stage)
         reset_button_container.addStretch()
 
@@ -780,15 +784,15 @@ class EditTaktDialog(QDialog):
 
         self.setLayout(main_layout)
 
-    def on_reset(self):
-        """Reseta o contador do takt para 0 e envia mensagem MQTT"""
-        logger.info("Reset do contador de takt solicitado")
+    def on_edit_stage(self):
+        """Atualiza o contador do takt para 0 e envia mensagem MQTT"""
+        logger.info("Atualização do contador de takt solicitado")
 
         # Confirmação do usuário
         reply = QMessageBox.question(
             self,
-            "Confirmar Reset",
-            "Tem certeza que deseja resetar o contador do takt para 0?\n\n"
+            "Confirmar Atualização",
+            "Tem certeza que deseja atualizar o contador do takt para o valor especificado?\n\n"
             "Esta ação irá:\n"
             f"• Altera o contador para {self.takt_input.text()}\n"
             "• Atualizar a interface\n"
@@ -798,7 +802,7 @@ class EditTaktDialog(QDialog):
         )
 
         if reply == QMessageBox.No:
-            logger.debug("Reset cancelado pelo usuário")
+            logger.debug("Edição cancelado pelo usuário")
             return
 
         # Define o valor como 0
@@ -808,6 +812,182 @@ class EditTaktDialog(QDialog):
         # Aceita o diálogo e retorna
         self.accept()
 
+    def update_takt_connection_id(self):
+        """Atualiza o ID de conexão do dispositivo Takt (célula e fábrica)"""
+        logger.info("Atualização do ID de conexão Takt solicitada")
+        
+        # Solicitar autenticação - usuário
+        username, ok = QInputDialog.getText(
+            self, "Autenticação Necessária", "Usuário:", QLineEdit.Normal
+        )
+
+        if not ok or not username:
+            logger.debug("Autenticação cancelada pelo usuário")
+            return
+
+        # Solicitar senha
+        password, ok = QInputDialog.getText(
+            self, "Autenticação Necessária", "Senha:", QLineEdit.Password
+        )
+
+        if not ok or not password:
+            logger.debug("Autenticação cancelada pelo usuário")
+            return
+
+        # Validar credenciais
+        if username != TECH_CONFIG_USER or password != TECH_CONFIG_PASS:
+            logger.warning("Tentativa de autenticação falhou para atualização de ID Takt")
+            QMessageBox.warning(self, "Acesso Negado", "Usuário ou senha incorretos!")
+            return
+        
+        logger.info("Autenticação bem-sucedida para atualização de ID Takt")
+        
+        # Obter novos valores dos campos
+        new_factory = self.factory_input.text().strip()
+        new_cell = self.cell_input.text().strip()
+        
+        # Validação básica
+        if not new_factory or not new_cell:
+            logger.warning("Campos de fábrica ou célula vazios")
+            QMessageBox.warning(
+                self,
+                "Campos Obrigatórios",
+                "Por favor, preencha os campos de Fábrica e Célula antes de atualizar."
+            )
+            return
+        
+        # Calcular novo device_id
+        factory_num = new_factory
+        cell_num = new_cell
+        new_device_id = f"cost-{factory_num}-{cell_num}"
+        
+        # Confirmação do usuário
+        reply = QMessageBox.question(
+            self,
+            "Confirmar Atualização de ID",
+            f"Tem certeza que deseja atualizar o ID de conexão?\n\n"
+            f"Fábrica: {new_factory}\n"
+            f"Célula: {new_cell}\n"
+            f"Novo Device ID: {new_device_id}\n\n"
+            "Esta ação irá:\n"
+            "• Atualizar a configuração local\n"
+            "• Enviar comando ao ESP32\n"
+            "• Pode exigir reinicialização da aplicação",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+
+        if reply == QMessageBox.No:
+            logger.debug("Atualização de ID cancelada pelo usuário")
+            return
+
+        # Enviar comando MQTT para atualizar o ESP32 ANTES de salvar
+        self._send_device_id_update_mqtt(new_factory, new_cell, new_device_id)
+        
+        # Carregar configuração atual
+        config = load_config()
+        
+        # Atualizar valores de device
+        if "device" not in config:
+            config["device"] = {}
+        
+        config["device"]["factory"] = new_factory
+        config["device"]["cell_number"] = new_cell
+        
+        # Salvar configuração atualizada
+        try:
+            save_config(config)
+            logger.info(f"Configuração atualizada com sucesso - Factory: {new_factory}, Cell: {new_cell}")
+        except Exception as e:
+            logger.error(f"Erro ao salvar configuração atualizada: {e}", exc_info=True)
+            QMessageBox.critical(
+                self,
+                "Erro ao Salvar",
+                f"Não foi possível salvar a configuração:\n{e}"
+            )
+            return
+        
+        # Atualizar a UI do parent se disponível
+        if self.parent() and hasattr(self.parent(), '_load'):
+            self.parent()._load()
+        
+        QMessageBox.information(
+            self,
+            "ID Atualizado",
+            f"ID de conexão atualizado com sucesso!\n\n"
+            f"Novo Device ID: {new_device_id}\n\n"
+            f"Comando enviado ao ESP32.\n"
+            f"Considere reiniciar a aplicação para garantir que todas as conexões sejam atualizadas."
+        )
+        
+        logger.info("Atualização de ID de conexão concluída")
+    
+    def _send_device_id_update_mqtt(self, factory: str, cell: str, device_id: str):
+        """Envia mensagem MQTT de atualização do device_id para o ESP32"""
+        try:
+            import json
+            from datetime import datetime
+
+            # Cria a mensagem seguindo o padrão de device_config
+            message = {
+                "event": "device_config",
+                "message": "update_device_id",
+                "factory": factory,
+                "cell_number": cell,
+                "device_id": device_id
+            }
+
+            # Verifica se há worker thread rodando com conexão MQTT
+            if self.parent() and hasattr(self.parent(), '_worker_thread'):
+                worker_thread = self.parent()._worker_thread
+                if worker_thread and worker_thread.isRunning():
+                    mqtt_manager = getattr(worker_thread, "_mqtt_manager", None)
+                    if mqtt_manager and mqtt_manager._connected:
+                        logger.info(
+                            f"Enviando atualização de device_id via MQTT para {device_id}: {message}"
+                        )
+
+                        # Usa publish_command do MQTTManager
+                        success = mqtt_manager.publish_command(device_id, message)
+
+                        if success:
+                            logger.info("Mensagem MQTT de atualização de device_id enviada com sucesso")
+                        else:
+                            logger.warning("Falha ao enviar mensagem MQTT de atualização de device_id")
+                            QMessageBox.warning(
+                                self,
+                                "Erro ao Enviar",
+                                "Não foi possível enviar o comando ao ESP32.\n\n"
+                                "Verifique a conexão MQTT.",
+                            )
+                    else:
+                        logger.warning(
+                            "MQTT Manager não está conectado. Mensagem não enviada."
+                        )
+                        QMessageBox.warning(
+                            self,
+                            "MQTT Desconectado",
+                            "O sistema não está conectado ao broker MQTT.\n\n"
+                            "A configuração foi salva, mas o comando não foi enviado ao ESP32.\n"
+                            "Por favor, inicie a análise para conectar ao MQTT.",
+                        )
+                else:
+                    logger.info(
+                        "Worker thread não está rodando. Configuração salva, mas comando MQTT não enviado."
+                    )
+            else:
+                logger.info(
+                    "Parent window ou worker thread não disponível. Configuração salva localmente."
+                )
+
+        except Exception as e:
+            logger.error(f"Erro ao enviar mensagem MQTT de atualização de device_id: {e}", exc_info=True)
+            QMessageBox.warning(
+                self,
+                "Erro",
+                f"Erro ao enviar comando MQTT:\n{e}\n\nA configuração foi salva localmente.",
+            )
+    
     def get_takt_value(self):
         """Retorna o valor do takt definido"""
         return getattr(self, "takt_value", None)
@@ -1206,8 +1386,8 @@ class MainWindow(QWidget):
             cell_number = device.get("cell_number", "").strip()
             factory = device.get("factory", "").strip()
 
-            factory_num = re.sub(r"\D", "", factory) or "0"
-            cell_num = re.sub(r"\D", "", cell_number) or "0"
+            factory_num = factory
+            cell_num = cell_number
             device_id = f"cost-{factory_num}-{cell_num}"
 
             # Cria a mensagem
@@ -1863,8 +2043,8 @@ class AsyncWorker(QThread):
                     cell_number = device.get("cell_number", "").strip()
                     factory = device.get("factory", "").strip()
 
-                    factory_num = re.sub(r"\D", "", factory) or "0"
-                    cell_num = re.sub(r"\D", "", cell_number) or "0"
+                    factory_num = factory
+                    cell_num = cell_number
                     device_id = f"cost-{factory_num}-{cell_num}"
 
                     mqtt_manager = MQTTManager(
