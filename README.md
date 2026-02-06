@@ -221,11 +221,23 @@ Mensagem enviada quando botão de reset é apertado
 
 ```json
 {
-  "event": "takt",
-  "message": "message",
-  "id": "cost-{factory}-{cell}",
-  "timestamp": "2025-11-07T14:32:18.123456",
+  "event": "device_config",
+  "message": "update_config",
   "takt_count": 0
+}
+```
+
+**Mensagem de Atualização de Device ID (JSON):**
+
+Enviada pelo dialog "Editar Takt" → "Atualiza conexao disp. Takt"
+
+```json
+{
+  "event": "device_config",
+  "message": "update_device_id",
+  "factory": "3",
+  "cell_number": "3324",
+  "device_id": "cost-3-3324"
 }
 ```
 
@@ -452,10 +464,26 @@ pio device monitor
 ### Interface de Configuração
 
 1. Clicar em **"Configurar"** na aplicação
-2. **Configurações Básicas**: Acessíveis diretamente
+2. **Configurações Básicas**: 
+   - Líder da Célula (editável diretamente)
 3. **Configurações Técnicas**: Requer autenticação
    - Usuário: `admin`
    - Senha: `dass@2025`
+   - MQTT Host, Usuário, Senha
+   - Caminho do modelo YOLO
+
+**⚠️ Nota:** Os campos de Célula, Fábrica e WiFi não são editáveis no dialog de configurações. Use o dialog **"Editar Takt"** para atualizar remotamente o device_id do ESP32.
+
+### Atualização do Device ID
+
+Para alterar a identificação do dispositivo Takt (célula e fábrica):
+
+1. **Abrir**: Botão **"Editar Takt"** na interface principal
+2. **Seção**: "Conexão Takt Receptor"
+3. **Editar**: Campos de Fábrica e Célula
+4. **Autenticar**: Credenciais técnicas (admin/dass@2025)
+5. **Aplicar**: Botão **"🔗 Atualiza conexao disp. Takt"**
+6. **Resultado**: ESP32 reconfigura automaticamente + config local atualizado
 
 ### Configuração ESP32
 
@@ -476,6 +504,52 @@ const char *MQTT_SERVER = "10.110.21.3";
 2. Verificar configurações
 3. Clicar em **"▶ Iniciar Análise"**
 4. Sistema aguarda detecção de tela takt
+
+### Editar Configurações do Takt
+
+#### Atualização Remota do Device ID (ESP32)
+
+A aplicação permite atualizar remotamente o ID do dispositivo ESP32 através do dialog "Editar Takt":
+
+1. **Abrir Dialog**: Clicar em **"Editar Takt"** na interface principal
+2. **Seção "Conexão Takt Receptor"**:
+   - Exibe o **Device ID atual** (formato: `cost-{factory}-{cell}`)
+   - Campos editáveis para **Fábrica** e **Célula**
+3. **Autenticação Requerida**:
+   - Usuário: `admin`
+   - Senha: `dass@2025`
+4. **Confirmação**: Preview do novo device_id antes de aplicar
+5. **Envio Automático**:
+   - Comando MQTT enviado para o ESP32 **antes** de salvar localmente
+   - ESP32 recebe novo device_id e se reconfigura automaticamente
+   - Configuração local atualizada após confirmação
+   - Interface atualizada automaticamente
+
+**Payload MQTT enviado:**
+
+```json
+{
+  "event": "device_config",
+  "message": "update_device_id",
+  "factory": "3",
+  "cell_number": "3324",
+  "device_id": "cost-3-3324"
+}
+```
+
+**Comportamento Inteligente:**
+
+- Sistema detecta automaticamente que novo device_id ainda não existe
+- Usa o device_id **antigo registrado** para enviar o comando
+- ESP32 recebe no tópico onde está inscrito (`takt/device/{id_antigo}`)
+- Após reconfiguração, ESP32 passa a usar novo device_id
+- ⚠️ **Importante**: Considere reiniciar a aplicação após atualização para reconectar com novo ID
+
+#### Reset Manual do Contador
+
+1. Clicar em **"🔄 Editar Estágio Contador"**
+2. Confirmar reset para 0
+3. Comando enviado via MQTT instantaneamente
 
 ### Estados do Sistema
 
@@ -594,6 +668,35 @@ Verificar device_status[ESP32_ID]
 3. **Heartbeat**: ESP32 deve enviar heartbeat a cada 30s
 4. **device_status**: Verificar se `connection.device_status[id]` está `True`
 5. **Last Will Testament**: Confirmar se ESP32 publicou status "online"
+
+### Atualização de Device ID não funciona
+
+**Problema:** ESP32 não recebe comando de atualização
+
+**Soluções:**
+
+1. **Verificar conexão MQTT**:
+   - ESP32 deve estar 🟢 **Conectado** antes de enviar
+   - Análise deve estar rodando (worker thread ativa)
+
+2. **Logs detalhados**:
+   ```bash
+   tail -f logs/app_debug.log | grep "device_id"
+   ```
+   - Procure por: `"Enviando atualização de device_id via MQTT"`
+   - Procure por: `"⚠️ Device ID não encontrado"` (indica fallback correto)
+
+3. **Verificar tópico MQTT**:
+   - Sistema deve usar device_id **antigo** automaticamente
+   - ESP32 recebe em `takt/device/{id_antigo}`
+
+4. **Reiniciar aplicação**:
+   - Após atualização bem-sucedida, reinicie para reconectar com novo ID
+   - Novo device_id será carregado de `config.json`
+
+5. **Confirmar ESP32 suporta comando**:
+   - Firmware ESP32 deve processar `"message": "update_device_id"`
+   - Verificar se ESP32 atualiza seus tópicos MQTT após receber
 
 ### Spam de avisos de ESP32 desconectado
 
