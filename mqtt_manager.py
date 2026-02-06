@@ -254,19 +254,35 @@ class MQTTManager:
 
         print(f"Publicando comando para {device_id}: {command}")
         device = self.devices.get(device_id)
+        
+        # Se o device_id não existe, mas estamos tentando atualizar o device_id,
+        # usar o primeiro (e provavelmente único) dispositivo registrado
+        target_device = device
         if not device:
-            logger.error(f"Dispositivo {device_id} não encontrado")
-            return False
+            # Verificar se é um comando de atualização de device_id
+            if command.get("message") == "update_device_id" and len(self.devices) > 0:
+                # Usar o primeiro dispositivo registrado (ID antigo)
+                target_device = list(self.devices.values())[0]
+                logger.info(
+                    f"⚠️  Device ID {device_id} não encontrado. "
+                    f"Usando dispositivo registrado {target_device.device_id} para enviar atualização de ID."
+                )
+            else:
+                logger.error(f"Dispositivo {device_id} não encontrado")
+                return False
 
-        if not device.connected:
-            logger.warning(f"{device_id} está offline!")
+        if not target_device.connected:
+            logger.warning(f"{target_device.device_id} está offline!")
 
         try:
             payload = json.dumps(command)
-            result = self.client.publish(device.command_topic, payload, qos=qos)
+            result = self.client.publish(target_device.command_topic, payload, qos=qos)
 
             if result.rc == mqtt.MQTT_ERR_SUCCESS:
-                logger.info(f"Comando enviado para {device_id}: {payload}")
+                logger.info(
+                    f"✅ Comando enviado para {target_device.device_id} "
+                    f"(topic: {target_device.command_topic}): {payload}"
+                )
                 return True
             else:
                 logger.error(f"Falha ao enviar comando: {result.rc}")
