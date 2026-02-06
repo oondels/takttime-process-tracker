@@ -35,7 +35,10 @@ os.makedirs(LOGS_DIR, exist_ok=True)
 logging.basicConfig(
     level=logging.DEBUG,
     format="%(asctime)s - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s",
-    handlers=[logging.FileHandler(os.path.join(LOGS_DIR, "app_debug.log")), logging.StreamHandler()],
+    handlers=[
+        logging.FileHandler(os.path.join(LOGS_DIR, "app_debug.log")),
+        logging.StreamHandler(),
+    ],
 )
 logger = logging.getLogger(__name__)
 
@@ -183,19 +186,19 @@ class ConfigDialog(QDialog):
         device_layout.setSpacing(12)
         device_layout.setContentsMargins(20, 20, 20, 20)
 
-        self.cell_input = QLineEdit()
-        self.cell_input.setPlaceholderText("Ex: Célula 01")
-        self.cell_input.setStyleSheet(input_style)
-        cell_label = QLabel("Número da Célula:")
-        cell_label.setStyleSheet(label_style)
-        device_layout.addRow(cell_label, self.cell_input)
+        # self.cell_input = QLineEdit()
+        # self.cell_input.setPlaceholderText("Ex: Célula 01")
+        # self.cell_input.setStyleSheet(input_style)
+        # cell_label = QLabel("Número da Célula:")
+        # cell_label.setStyleSheet(label_style)
+        # device_layout.addRow(cell_label, self.cell_input)
 
-        self.factory_input = QLineEdit()
-        self.factory_input.setPlaceholderText("Ex: Fábrica Principal")
-        self.factory_input.setStyleSheet(input_style)
-        factory_label = QLabel("Fábrica:")
-        factory_label.setStyleSheet(label_style)
-        device_layout.addRow(factory_label, self.factory_input)
+        # self.factory_input = QLineEdit()
+        # self.factory_input.setPlaceholderText("Ex: Fábrica Principal")
+        # self.factory_input.setStyleSheet(input_style)
+        # factory_label = QLabel("Fábrica:")
+        # factory_label.setStyleSheet(label_style)
+        # device_layout.addRow(factory_label, self.factory_input)
 
         self.leader_input = QLineEdit()
         self.leader_input.setPlaceholderText("Ex: João Silva")
@@ -215,23 +218,23 @@ class ConfigDialog(QDialog):
         network_layout.setSpacing(12)
         network_layout.setContentsMargins(20, 20, 20, 20)
 
-        self.wifi_ssid_input = QLineEdit()
-        self.wifi_ssid_input.setPlaceholderText("Ex: RedeWiFi-Producao")
-        self.wifi_ssid_input.setStyleSheet(input_style)
-        ssid_label = QLabel("SSID WiFi:")
-        ssid_label.setStyleSheet(label_style)
-        network_layout.addRow(ssid_label, self.wifi_ssid_input)
+        # self.wifi_ssid_input = QLineEdit()
+        # self.wifi_ssid_input.setPlaceholderText("Ex: RedeWiFi-Producao")
+        # self.wifi_ssid_input.setStyleSheet(input_style)
+        # ssid_label = QLabel("SSID WiFi:")
+        # ssid_label.setStyleSheet(label_style)
+        # network_layout.addRow(ssid_label, self.wifi_ssid_input)
 
-        self.wifi_pass_input = QLineEdit()
-        self.wifi_pass_input.setPlaceholderText("Senha do WiFi")
-        self.wifi_pass_input.setEchoMode(QLineEdit.Password)
-        self.wifi_pass_input.setStyleSheet(input_style)
-        pass_label = QLabel("Senha WiFi:")
-        pass_label.setStyleSheet(label_style)
-        network_layout.addRow(pass_label, self.wifi_pass_input)
+        # self.wifi_pass_input = QLineEdit()
+        # self.wifi_pass_input.setPlaceholderText("Senha do WiFi")
+        # self.wifi_pass_input.setEchoMode(QLineEdit.Password)
+        # self.wifi_pass_input.setStyleSheet(input_style)
+        # pass_label = QLabel("Senha WiFi:")
+        # pass_label.setStyleSheet(label_style)
+        # network_layout.addRow(pass_label, self.wifi_pass_input)
 
-        network_group.setLayout(network_layout)
-        main_layout.addWidget(network_group)
+        # network_group.setLayout(network_layout)
+        # main_layout.addWidget(network_group)
 
         # ===== TÉCNICO =====
         # Container para o título com cadeado
@@ -451,14 +454,14 @@ class ConfigDialog(QDialog):
 
         # Dispositivo
         device = cfg.get("device", {})
-        self.cell_input.setText(device.get("cell_number", ""))
-        self.factory_input.setText(device.get("factory", ""))
+        # self.cell_input.setText(device.get("cell_number", ""))
+        # self.factory_input.setText(device.get("factory", ""))
         self.leader_input.setText(device.get("cell_leader", ""))
 
         # Rede
-        network = cfg.get("network", {})
-        self.wifi_ssid_input.setText(network.get("wifi_ssid", ""))
-        self.wifi_pass_input.setText(network.get("wifi_pass", ""))
+        # network = cfg.get("network", {})
+        # self.wifi_ssid_input.setText(network.get("wifi_ssid", ""))
+        # self.wifi_pass_input.setText(network.get("wifi_pass", ""))
 
         # Técnico
         tech = cfg.get("tech", {})
@@ -554,7 +557,7 @@ class EditTaktDialog(QDialog):
     def __init__(self, parent=None, current_takt=0):
         super().__init__(parent)
         logger.debug(f"Inicializando EditTaktDialog com takt atual: {current_takt}")
-        self.setWindowTitle("Editar Contagem do Takt")
+        self.setWindowTitle("Editar Takt Time")
         self.setModal(True)
         self.setMinimumWidth(400)
         self.setMinimumHeight(250)
@@ -565,7 +568,7 @@ class EditTaktDialog(QDialog):
         main_layout = QVBoxLayout()
 
         # Título
-        title = QLabel("Editar Contagem do Takt")
+        title = QLabel("Editar Takt Time")
         title_font = QFont()
         title_font.setPointSize(14)
         title_font.setBold(True)
@@ -575,7 +578,7 @@ class EditTaktDialog(QDialog):
 
         # Descrição
         description = QLabel(
-            "Altere a contagem atual do takt. O valor será atualizado na interface principal."
+            "Altere informações e estados do takt. O valor será atualizado na interface principal."
         )
         description.setWordWrap(True)
         description.setStyleSheet("color: #666; padding: 10px;")
@@ -615,28 +618,117 @@ class EditTaktDialog(QDialog):
         self.takt_input = QLineEdit()
         self.takt_input.setText(str(self.current_takt))
         self.takt_input.setPlaceholderText("Edição manual será implementada em breve")
-        self.takt_input.setReadOnly(True)
+        self.takt_input.setReadOnly(False)
         self.takt_input.setStyleSheet(
             "padding: 8px; border: 1px solid #ccc; border-radius: 3px; background-color: #f0f0f0; color: #888;"
         )
         input_layout.addRow("Novo valor:", self.takt_input)
 
-        # Dica
-        hint_label = QLabel("Use o botão 'Reset' abaixo para reiniciar o contador")
-        hint_label.setStyleSheet("color: #95a5a6; font-size: 9pt; font-style: italic;")
-        input_layout.addRow("", hint_label)
-
         input_group.setLayout(input_layout)
         main_layout.addWidget(input_group)
+
+        # Grupo de conexão Takt Receptor
+        connection_group = QGroupBox("Conexão Takt Receptor")
+        connection_group.setStyleSheet(
+            """
+            QGroupBox {
+                font-weight: bold;
+                border: 2px solid #3498db;
+                border-radius: 5px;
+                margin-top: 10px;
+                padding-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px;
+                color: #2980b9;
+            }
+        """
+        )
+
+        connection_layout = QFormLayout()
+        connection_layout.setSpacing(12)
+        connection_layout.setContentsMargins(20, 20, 20, 20)
+
+        # Obter valores atuais de cell e factory
+        config = load_config()
+        device_config = config.get("device", {})
+        current_cell = device_config.get("cell_number", "").strip()
+        current_factory = device_config.get("factory", "").strip()
+        
+        # Calcular device_id atual
+        import re
+        factory_num = re.sub(r"\D", "", current_factory) or "0"
+        cell_num = re.sub(r"\D", "", current_cell) or "0"
+        current_device_id = f"cost-{factory_num}-{cell_num}"
+        
+        # Label mostrando device ID atual
+        device_id_label = QLabel(f"Device ID atual: {current_device_id}")
+        device_id_label.setStyleSheet("color: #7f8c8d; font-style: italic; font-weight: normal;")
+        connection_layout.addRow("", device_id_label)
+
+        # Input para número da fábrica
+        self.factory_input = QLineEdit()
+        self.factory_input.setText(current_factory)
+        self.factory_input.setPlaceholderText("Ex: 2")
+        self.factory_input.setStyleSheet(
+            "padding: 8px; border: 1px solid #ccc; border-radius: 3px;"
+        )
+        connection_layout.addRow("Fábrica:", self.factory_input)
+
+        # Input para número da célula
+        self.cell_input = QLineEdit()
+        self.cell_input.setText(current_cell)
+        self.cell_input.setPlaceholderText("Ex: 2408")
+        self.cell_input.setStyleSheet(
+            "padding: 8px; border: 1px solid #ccc; border-radius: 3px;"
+        )
+        connection_layout.addRow("Célula:", self.cell_input)
+
+        connection_group.setLayout(connection_layout)
+        main_layout.addWidget(connection_group)
+
+        # Botão de atualização da conexão
+        update_connection_container = QHBoxLayout()
+        update_connection_container.addStretch()
+
+        self.update_connection_btn = QPushButton("🔗 Atualiza conexao disp. Takt")
+        self.update_connection_btn.setMinimumHeight(40)
+        self.update_connection_btn.setMinimumWidth(250)
+        self.update_connection_btn.setStyleSheet(
+            """
+            QPushButton {
+                background-color: #ff8c00;
+                color: white;
+                padding: 10px 20px;
+                border: none;
+                border-radius: 4px;
+                font-weight: bold;
+                font-size: 11pt;
+            }
+            QPushButton:hover {
+                background-color: #e67e00;
+            }
+            QPushButton:pressed {
+                background-color: #cc7a00;
+            }
+        """
+        )
+        # Botão será conectado posteriormente conforme instrução do usuário
+        update_connection_container.addWidget(self.update_connection_btn)
+        update_connection_container.addStretch()
+
+        main_layout.addLayout(update_connection_container)
 
         # Botão de Reset
         reset_button_container = QHBoxLayout()
         reset_button_container.addStretch()
-        
-        self.reset_btn = QPushButton("🔄 Reset Contador")
-        self.reset_btn.setMinimumHeight(40)
-        self.reset_btn.setMinimumWidth(200)
-        self.reset_btn.setStyleSheet(
+
+        self.edit_takt_stage = QPushButton("🔄 Editar Estágio Contador")
+        self.edit_takt_stage.setMinimumHeight(40)
+        self.edit_takt_stage.setMinimumWidth(200)
+        self.edit_takt_stage.setStyleSheet(
             """
             QPushButton {
                 background-color: #e67e22;
@@ -655,10 +747,10 @@ class EditTaktDialog(QDialog):
             }
         """
         )
-        self.reset_btn.clicked.connect(self.on_reset)
-        reset_button_container.addWidget(self.reset_btn)
+        self.edit_takt_stage.clicked.connect(self.on_reset)
+        reset_button_container.addWidget(self.edit_takt_stage)
         reset_button_container.addStretch()
-        
+
         main_layout.addLayout(reset_button_container)
 
         # Botões de ação (Salvar/Cancelar)
@@ -691,34 +783,34 @@ class EditTaktDialog(QDialog):
     def on_reset(self):
         """Reseta o contador do takt para 0 e envia mensagem MQTT"""
         logger.info("Reset do contador de takt solicitado")
-        
+
         # Confirmação do usuário
         reply = QMessageBox.question(
             self,
             "Confirmar Reset",
             "Tem certeza que deseja resetar o contador do takt para 0?\n\n"
             "Esta ação irá:\n"
-            "• Resetar o contador para 0\n"
+            f"• Altera o contador para {self.takt_input.text()}\n"
             "• Atualizar a interface\n"
             "• Enviar comando ao ESP32",
             QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No
+            QMessageBox.No,
         )
-        
+
         if reply == QMessageBox.No:
             logger.debug("Reset cancelado pelo usuário")
             return
-        
+
         # Define o valor como 0
         self.takt_value = 0
         logger.info("Valor do takt resetado para 0")
-        
+
         # Aceita o diálogo e retorna
         self.accept()
 
     def get_takt_value(self):
-        """Retorna o valor do takt definido (sempre 0 para reset)"""
-        return getattr(self, 'takt_value', None)
+        """Retorna o valor do takt definido"""
+        return getattr(self, "takt_value", None)
 
 
 class MainWindow(QWidget):
@@ -732,14 +824,16 @@ class MainWindow(QWidget):
         # Estado da tela Takt e timeout
         self.takt_screen_working = False
         self.last_takt_screen_check = None
-        self.takt_timeout_sec = 40 # Tempo maximo sem resposta antes de considerar inativa
+        self.takt_timeout_sec = (
+            40  # Tempo maximo sem resposta antes de considerar inativa
+        )
         self.last_takt_time_count = 0
 
         # Estado de inicialização e segurança
         self._model_loaded = False
         self._mqtt_connected = False
         self._initialization_thread = None
-        
+
         # Controle de aviso de dispositivo desconectado (evita spam)
         self._last_device_warning_time = None
         self._device_warning_cooldown = 30  # segundos entre avisos
@@ -1005,7 +1099,7 @@ class MainWindow(QWidget):
         init_status_layout.addWidget(self.esp32_status_label)
 
         init_status_layout.addStretch()
-        
+
         # Botão de reconectar ao broker MQTT
         self.reconnect_mqtt_btn = QPushButton("🔄 Reconectar MQTT")
         self.reconnect_mqtt_btn.setFixedHeight(30)
@@ -1033,10 +1127,12 @@ class MainWindow(QWidget):
         """
         )
         self.reconnect_mqtt_btn.setEnabled(False)  # Desabilitado inicialmente
-        self.reconnect_mqtt_btn.setToolTip("Reconectar ao broker MQTT (disponível apenas quando desconectado)")
+        self.reconnect_mqtt_btn.setToolTip(
+            "Reconectar ao broker MQTT (disponível apenas quando desconectado)"
+        )
         self.reconnect_mqtt_btn.clicked.connect(self.on_reconnect_mqtt)
         init_status_layout.addWidget(self.reconnect_mqtt_btn)
-        
+
         layout.addLayout(init_status_layout)
 
         self.setLayout(layout)
@@ -1068,96 +1164,70 @@ class MainWindow(QWidget):
             self._check_prerequisites()
 
     def on_edit_takt(self):
-        """Abre o diálogo de edição do takt após autenticação"""
-        logger.info("Tentando abrir diálogo de edição de takt")
-        
-        # Solicitar usuário
-        username, ok = QInputDialog.getText(
-            self, "Autenticação Necessária", "Usuário:", QLineEdit.Normal
-        )
+        # Abre o diálogo de edição do takt
+        dialog = EditTaktDialog(self, self.last_takt_time_count)
+        if dialog.exec_() == QDialog.Accepted:
+            new_takt_value = dialog.get_takt_value()
 
-        if not ok or not username:
-            logger.debug("Autenticação cancelada pelo usuário")
-            return
+            # Verifica se um valor foi retornado (usuário clicou em alterar takt)
+            if new_takt_value is not None:
+                logger.info(f"Alteração do takt solicitado. Novo valor: {new_takt_value}")
 
-        # Solicitar senha
-        password, ok = QInputDialog.getText(
-            self, "Autenticação Necessária", "Senha:", QLineEdit.Password
-        )
+                # Atualiza o valor na UI
+                self.last_takt_time_count = new_takt_value
+                self.status_takt.setText(str(new_takt_value))
 
-        if not ok or not password:
-            logger.debug("Autenticação cancelada pelo usuário")
-            return
+                # Cancela o timer de reset automático se estiver ativo
+                if (
+                    hasattr(self, "_takt_reset_timer")
+                    and self._takt_reset_timer.isActive()
+                ):
+                    self._takt_reset_timer.stop()
+                    logger.debug("Timer de reset automático cancelado")
 
-        # Validar credenciais
-        if username == TECH_CONFIG_USER and password == TECH_CONFIG_PASS:
-            logger.info("Autenticação bem-sucedida para edição de takt")
-            
-            # Abre o diálogo de edição do takt
-            dialog = EditTaktDialog(self, self.last_takt_time_count)
-            if dialog.exec_() == QDialog.Accepted:
-                new_takt_value = dialog.get_takt_value()
-                
-                # Verifica se um valor foi retornado (usuário clicou em Reset)
-                if new_takt_value is not None:
-                    logger.info(f"Reset do takt solicitado. Novo valor: {new_takt_value}")
-                    
-                    # Atualiza o valor na UI
-                    self.last_takt_time_count = new_takt_value
-                    self.status_takt.setText(str(new_takt_value))
-                    
-                    # Cancela o timer de reset automático se estiver ativo
-                    if hasattr(self, "_takt_reset_timer") and self._takt_reset_timer.isActive():
-                        self._takt_reset_timer.stop()
-                        logger.debug("Timer de reset automático cancelado")
-                    
-                    # Envia mensagem MQTT para o ESP32
-                    self._send_takt_reset_mqtt(new_takt_value)
-                    
-                    QMessageBox.information(
-                        self,
-                        "Takt Resetado",
-                        f"Contador resetado para: {new_takt_value}\n\nComando enviado ao ESP32.",
-                    )
-        else:
-            logger.warning("Tentativa de autenticação falhou para edição de takt")
-            QMessageBox.warning(self, "Acesso Negado", "Usuário ou senha incorretos!")
+                # Envia mensagem MQTT para o ESP32
+                self._send_takt_edit_stage_mqtt(new_takt_value)
 
-    def _send_takt_reset_mqtt(self, takt_count: int):
-        """Envia mensagem MQTT de reset do takt para o ESP32"""
+                QMessageBox.information(
+                    self,
+                    "Takt Resetado",
+                    f"Contador resetado para: {new_takt_value}\n\nComando enviado ao ESP32.",
+                )
+
+    def _send_takt_edit_stage_mqtt(self, takt_count: int):
+        """Envia mensagem MQTT de edição do estágio do takt para o ESP32"""
         try:
             import json
             from datetime import datetime
-            
+
             # Obtém o device_id da configuração
             cfg = load_config()
             device = cfg.get("device", {})
             cell_number = device.get("cell_number", "").strip()
             factory = device.get("factory", "").strip()
-            
+
             factory_num = re.sub(r"\D", "", factory) or "0"
             cell_num = re.sub(r"\D", "", cell_number) or "0"
             device_id = f"cost-{factory_num}-{cell_num}"
-            
+
             # Cria a mensagem
-            timestamp = datetime.now().isoformat()
             message = {
-                "event": "takt",
-                "message": "Update takt manual",
-                "id": f"const-{device_id}",
-                "timestamp": timestamp,
+                "event": "device_config",
+                "message": "update_config",
                 "takt_count": takt_count
             }
-            
+
             # Verifica se há worker thread rodando com conexão MQTT
             if self._worker_thread and self._worker_thread.isRunning():
-                mqtt_manager = getattr(self._worker_thread, '_mqtt_manager', None)
+                mqtt_manager = getattr(self._worker_thread, "_mqtt_manager", None)
                 if mqtt_manager and mqtt_manager._connected:
-                    logger.info(f"Enviando reset do takt via MQTT para {device_id}: {message}")
-                    
+                    logger.info(
+                        f"Enviando reset do takt via MQTT para {device_id}: {message}"
+                    )
+
                     # Usa publish_command do MQTTManager
                     success = mqtt_manager.publish_command(device_id, message)
-                    
+
                     if success:
                         logger.info("Mensagem MQTT de reset enviada com sucesso")
                     else:
@@ -1166,49 +1236,53 @@ class MainWindow(QWidget):
                             self,
                             "Erro ao Enviar",
                             "Não foi possível enviar o comando ao ESP32.\n\n"
-                            "Verifique a conexão MQTT."
+                            "Verifique a conexão MQTT.",
                         )
                 else:
-                    logger.warning("MQTT Manager não está conectado. Mensagem não enviada.")
+                    logger.warning(
+                        "MQTT Manager não está conectado. Mensagem não enviada."
+                    )
                     QMessageBox.warning(
                         self,
                         "MQTT Desconectado",
                         "Não foi possível enviar o comando ao ESP32.\n\n"
                         "O sistema MQTT não está conectado.\n"
-                        "Inicie a análise primeiro para estabelecer conexão."
+                        "Inicie a análise primeiro para estabelecer conexão.",
                     )
             else:
-                logger.warning("Worker thread não está rodando. Mensagem MQTT não enviada.")
+                logger.warning(
+                    "Worker thread não está rodando. Mensagem MQTT não enviada."
+                )
                 QMessageBox.warning(
                     self,
                     "Sistema Parado",
                     "Não foi possível enviar o comando ao ESP32.\n\n"
                     "O sistema de análise não está rodando.\n"
-                    "Inicie a análise primeiro para estabelecer conexão."
+                    "Inicie a análise primeiro para estabelecer conexão.",
                 )
-                
+
         except Exception as e:
             logger.error(f"Erro ao enviar mensagem MQTT de reset: {e}", exc_info=True)
             QMessageBox.critical(
                 self,
                 "Erro ao Enviar Comando",
-                f"Erro ao enviar comando de reset ao ESP32:\n{e}"
+                f"Erro ao enviar comando de reset ao ESP32:\n{e}",
             )
 
     def on_reconnect_mqtt(self):
         """Tenta reconectar ao broker MQTT"""
         logger.info("=== Tentando reconectar ao broker MQTT ===")
-        
+
         # Desabilita o botão durante a tentativa de reconexão
         self.reconnect_mqtt_btn.setEnabled(False)
         self.reconnect_mqtt_btn.setText("🔄 Conectando...")
-        
+
         # Atualiza status visual
         self.mqtt_status_label.setText("🟡 MQTT: Reconectando...")
         self.mqtt_status_label.setStyleSheet(
             "padding: 5px; font-size: 10pt; color: #f39c12;"
         )
-        
+
         # Inicia thread de reconexão
         if (
             self._initialization_thread is None
@@ -1300,11 +1374,13 @@ class MainWindow(QWidget):
             self.mqtt_status_label.setStyleSheet(
                 "padding: 5px; font-size: 10pt; color: #27ae60;"
             )
-            
+
             # Desabilita o botão de reconexão quando conectado
             self.reconnect_mqtt_btn.setEnabled(False)
             self.reconnect_mqtt_btn.setText("🔄 Reconectar MQTT")
-            self.reconnect_mqtt_btn.setToolTip("Reconectar ao broker MQTT (disponível apenas quando desconectado)")
+            self.reconnect_mqtt_btn.setToolTip(
+                "Reconectar ao broker MQTT (disponível apenas quando desconectado)"
+            )
 
         elif event == "mqtt_error":
             self._mqtt_connected = False
@@ -1314,17 +1390,19 @@ class MainWindow(QWidget):
             self.mqtt_status_label.setStyleSheet(
                 "padding: 5px; font-size: 10pt; color: #e74c3c;"
             )
-            
+
             # Habilita o botão de reconexão quando desconectado
             self.reconnect_mqtt_btn.setEnabled(True)
             self.reconnect_mqtt_btn.setText("🔄 Reconectar MQTT")
-            self.reconnect_mqtt_btn.setToolTip("Clique para tentar reconectar ao broker MQTT")
-            
+            self.reconnect_mqtt_btn.setToolTip(
+                "Clique para tentar reconectar ao broker MQTT"
+            )
+
             # Mensagem de erro mais detalhada
             cfg = load_config()
             tech = cfg.get("tech", {})
             mqtt_host = tech.get("mqtt_host", "não configurado")
-            
+
             QMessageBox.warning(
                 self,
                 "Erro na Conexão MQTT",
@@ -1366,13 +1444,17 @@ class MainWindow(QWidget):
             self.esp32_status_label.setStyleSheet(
                 "padding: 5px; font-size: 10pt; color: #27ae60; font-weight: bold;"
             )
-            self.esp32_status_label.setToolTip(f"Dispositivo {device_id} está online e enviando heartbeats")
+            self.esp32_status_label.setToolTip(
+                f"Dispositivo {device_id} está online e enviando heartbeats"
+            )
         else:
             self.esp32_status_label.setText(f"🔴 ESP32: Desconectado ({device_id})")
             self.esp32_status_label.setStyleSheet(
                 "padding: 5px; font-size: 10pt; color: #e74c3c; font-weight: bold;"
             )
-            self.esp32_status_label.setToolTip(f"Dispositivo {device_id} está offline ou não responde")
+            self.esp32_status_label.setToolTip(
+                f"Dispositivo {device_id} está offline ou não responde"
+            )
             # Se dispositivo ficou offline durante análise, pausar
             if self._analysis_running:
                 logger.warning("Dispositivo ESP32 offline durante análise!")
@@ -1498,14 +1580,19 @@ class MainWindow(QWidget):
             self.mqtt_status_label.setStyleSheet(
                 "padding: 5px; font-size: 10pt; color: #27ae60;"
             )
-            
+
             # Desabilita o botão de reconexão quando conectado
             self.reconnect_mqtt_btn.setEnabled(False)
             self.reconnect_mqtt_btn.setText("🔄 Reconectar MQTT")
-            self.reconnect_mqtt_btn.setToolTip("Reconectar ao broker MQTT (disponível apenas quando desconectado)")
-            
+            self.reconnect_mqtt_btn.setToolTip(
+                "Reconectar ao broker MQTT (disponível apenas quando desconectado)"
+            )
+
             # Atualizar status do ESP32 para "aguardando" APENAS se ainda estiver no estado inicial
-            if "Aguardando..." in self.esp32_status_label.text() or "⚪" in self.esp32_status_label.text():
+            if (
+                "Aguardando..." in self.esp32_status_label.text()
+                or "⚪" in self.esp32_status_label.text()
+            ):
                 self.esp32_status_label.setText("🟡 ESP32: Aguardando conexão...")
                 self.esp32_status_label.setStyleSheet(
                     "padding: 5px; font-size: 10pt; color: #f39c12;"
@@ -1518,12 +1605,14 @@ class MainWindow(QWidget):
             self.mqtt_status_label.setStyleSheet(
                 "padding: 5px; font-size: 10pt; color: #e74c3c;"
             )
-            
+
             # Habilita o botão de reconexão
             self.reconnect_mqtt_btn.setEnabled(True)
             self.reconnect_mqtt_btn.setText("🔄 Reconectar MQTT")
-            self.reconnect_mqtt_btn.setToolTip("Clique para tentar reconectar ao broker MQTT")
-            
+            self.reconnect_mqtt_btn.setToolTip(
+                "Clique para tentar reconectar ao broker MQTT"
+            )
+
             # Para a análise ANTES de mostrar o dialog para evitar loop
             if self._analysis_running:
                 logger.warning("Parando análise devido a erro na conexão MQTT")
@@ -1560,7 +1649,7 @@ class MainWindow(QWidget):
                 if self._worker_thread and self._worker_thread.isRunning():
                     logger.debug("Parando AsyncWorker thread devido a erro MQTT")
                     self._worker_thread.stop()
-            
+
             # Mostra o erro apenas uma vez
             QMessageBox.critical(
                 self,
@@ -1579,10 +1668,12 @@ class MainWindow(QWidget):
         elif event == "takt_detected":
             takt_number = data.get("takt", self.last_takt_time_count)
             device_connected = data.get("device_connected", False)
-            
-            logger.info(f"Takt detectado! Etapa: {takt_number}/3 (ESP32: {'conectado' if device_connected else 'desconectado'})")
+
+            logger.info(
+                f"Takt detectado! Etapa: {takt_number}/3 (ESP32: {'conectado' if device_connected else 'desconectado'})"
+            )
             self.takt_screen_working = True
-            
+
             # Atualiza status com cor diferente baseado na conexão do ESP32
             if device_connected:
                 self.status_label.setText("Analisando (ESP32 ON)")
@@ -1594,7 +1685,7 @@ class MainWindow(QWidget):
                 self.status_label.setStyleSheet(
                     "font-size: 14pt; font-weight: bold; color: #f39c12; padding: 15px;"
                 )
-            
+
             self.last_takt_screen_check = time.monotonic()
             # Atualiza o status da label takt (UI)
             self.last_takt_time_count = takt_number
@@ -1616,39 +1707,43 @@ class MainWindow(QWidget):
             device_id = data.get("device_id", "")
             message = data.get("message", "")
             takt_detected = data.get("takt_detected", False)
-            
+
             logger.warning(f"{message}")
-            
+
             if takt_detected:
-                self.status_label.setText(
-                    f"Takt detectado mas ESP32 desconectado!"
-                )
+                self.status_label.setText(f"Takt detectado mas ESP32 desconectado!")
                 self.status_label.setStyleSheet(
                     "font-size: 14pt; font-weight: bold; color: #f39c12; padding: 15px;"
                 )
-                
+
                 # Verifica cooldown antes de mostrar dialog (evita spam)
                 current_time = time.time()
                 should_show_warning = False
-                
+
                 if self._last_device_warning_time is None:
                     # Primeira vez, mostra
                     should_show_warning = True
-                elif (current_time - self._last_device_warning_time) >= self._device_warning_cooldown:
+                elif (
+                    current_time - self._last_device_warning_time
+                ) >= self._device_warning_cooldown:
                     # Já passou tempo suficiente desde último aviso
                     should_show_warning = True
                 else:
                     # Ainda em cooldown
-                    time_remaining = self._device_warning_cooldown - (current_time - self._last_device_warning_time)
+                    time_remaining = self._device_warning_cooldown - (
+                        current_time - self._last_device_warning_time
+                    )
                     logger.debug(
                         f"Aviso de dispositivo desconectado em cooldown. "
                         f"Próximo aviso em {time_remaining:.0f}s"
                     )
-                
+
                 if should_show_warning:
                     self._last_device_warning_time = current_time
                     # Exibe notificação visual não-bloqueante
-                    QTimer.singleShot(0, lambda: self._show_device_disconnected_warning(device_id))
+                    QTimer.singleShot(
+                        0, lambda: self._show_device_disconnected_warning(device_id)
+                    )
 
     def _reset_takt_counter(self):
         """Reseta o contador de takt tanto na UI quanto na variável interna"""
@@ -1767,7 +1862,7 @@ class AsyncWorker(QThread):
                     device = cfg.get("device", {})
                     cell_number = device.get("cell_number", "").strip()
                     factory = device.get("factory", "").strip()
-                    
+
                     factory_num = re.sub(r"\D", "", factory) or "0"
                     cell_num = re.sub(r"\D", "", cell_number) or "0"
                     device_id = f"cost-{factory_num}-{cell_num}"
@@ -1806,7 +1901,10 @@ class AsyncWorker(QThread):
 
                     else:
                         logger.error("Falha ao conectar ao broker MQTT")
-                        on_event("connection_error", {"error": "Falha ao conectar ao broker MQTT"})
+                        on_event(
+                            "connection_error",
+                            {"error": "Falha ao conectar ao broker MQTT"},
+                        )
                         return
                 except Exception as e:
                     logger.error(
@@ -1940,7 +2038,7 @@ class InitializationWorker(QThread):
                 return
 
             logger.debug(f"Testando conexão MQTT com: {mqtt_host}")
-            
+
             # Testa conexão MQTT de verdade
             from mqtt_manager import MQTTManager
 
