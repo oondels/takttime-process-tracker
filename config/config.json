@@ -1,7 +1,7 @@
 {
   "device": {
-    "cell_number": "2408",
-    "factory": "2",
+    "cell_number": "id",
+    "factory": "default",
     "cell_leader": "hendrius"
   },
   "network": {
