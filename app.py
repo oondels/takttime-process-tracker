@@ -630,6 +630,38 @@ class EditTaktDialog(QDialog):
         input_group.setLayout(input_layout)
         main_layout.addWidget(input_group)
 
+        # Botão de Reset
+        reset_button_container = QHBoxLayout()
+        reset_button_container.addStretch()
+
+        self.edit_takt_stage = QPushButton("🔄 Editar Estágio Contador")
+        self.edit_takt_stage.setMinimumHeight(40)
+        self.edit_takt_stage.setMinimumWidth(200)
+        self.edit_takt_stage.setStyleSheet(
+            """
+            QPushButton {
+                background-color: #e67e22;
+                color: white;
+                padding: 10px 20px;
+                border: none;
+                border-radius: 4px;
+                font-weight: bold;
+                font-size: 11pt;
+            }
+            QPushButton:hover {
+                background-color: #d35400;
+            }
+            QPushButton:pressed {
+                background-color: #ba4a00;
+            }
+        """
+        )
+        self.edit_takt_stage.clicked.connect(self.on_edit_stage)
+        reset_button_container.addWidget(self.edit_takt_stage)
+        reset_button_container.addStretch()
+
+        main_layout.addLayout(reset_button_container)
+
         # Grupo de conexão Takt Receptor
         connection_group = QGroupBox("Conexão Takt Receptor")
         connection_group.setStyleSheet(
@@ -725,38 +757,6 @@ class EditTaktDialog(QDialog):
 
         main_layout.addLayout(update_connection_container)
 
-        # Botão de Reset
-        reset_button_container = QHBoxLayout()
-        reset_button_container.addStretch()
-
-        self.edit_takt_stage = QPushButton("🔄 Editar Estágio Contador")
-        self.edit_takt_stage.setMinimumHeight(40)
-        self.edit_takt_stage.setMinimumWidth(200)
-        self.edit_takt_stage.setStyleSheet(
-            """
-            QPushButton {
-                background-color: #e67e22;
-                color: white;
-                padding: 10px 20px;
-                border: none;
-                border-radius: 4px;
-                font-weight: bold;
-                font-size: 11pt;
-            }
-            QPushButton:hover {
-                background-color: #d35400;
-            }
-            QPushButton:pressed {
-                background-color: #ba4a00;
-            }
-        """
-        )
-        self.edit_takt_stage.clicked.connect(self.on_edit_stage)
-        reset_button_container.addWidget(self.edit_takt_stage)
-        reset_button_container.addStretch()
-
-        main_layout.addLayout(reset_button_container)
-
         # Botões de ação (Salvar/Cancelar)
         button_box = QDialogButtonBox(QDialogButtonBox.Cancel)
         button_box.button(QDialogButtonBox.Cancel).setText("Fechar")
@@ -785,7 +785,7 @@ class EditTaktDialog(QDialog):
         self.setLayout(main_layout)
 
     def on_edit_stage(self):
-        """Atualiza o contador do takt para 0 e envia mensagem MQTT"""
+        """Atualiza o contador do takt e envia mensagem MQTT"""
         logger.info("Atualização do contador de takt solicitado")
 
         # Confirmação do usuário
@@ -802,12 +802,22 @@ class EditTaktDialog(QDialog):
         )
 
         if reply == QMessageBox.No:
-            logger.debug("Edição cancelado pelo usuário")
+            logger.debug("Edição cancelada pelo usuário")
             return
 
-        # Define o valor como 0
-        self.takt_value = 0
-        logger.info("Valor do takt resetado para 0")
+        if self.takt_input.text() == "3" or self.takt_input.text() == 3:
+            logger.info("Bloqueio de edição, tentativa de aplicar nivel 3.")
+            QMessageBox.warning(
+                self,
+                "Ação Bloqueada",
+                "Só é possível alterar os estágios entre 0 e 2."
+            )
+            return
+
+        # Atualiza o valor do takt
+        self.takt_value = self.takt_input.text()
+        
+        logger.info(f"Valor do takt atualizado para {self.takt_value}")
 
         # Aceita o diálogo e retorna
         self.accept()
