@@ -630,6 +630,32 @@ class EditTaktDialog(QDialog):
         input_group.setLayout(input_layout)
         main_layout.addWidget(input_group)
 
+        # Verificar se a análise está rodando ANTES de criar o botão de edição de estágio
+        analysis_running_stage = False
+        if self.parent() and hasattr(self.parent(), '_worker_thread'):
+            worker_thread_stage = self.parent()._worker_thread
+            analysis_running_stage = worker_thread_stage is not None and worker_thread_stage.isRunning()
+        
+        # Label de status da análise para edição de estágio
+        status_stage_label = QLabel()
+        if analysis_running_stage:
+            status_stage_label.setText("✅ Sistema conectado - Pronto para editar")
+            status_stage_label.setStyleSheet(
+                "color: #27ae60; font-weight: bold; padding: 5px; "
+                "background-color: #d5f4e6; border-radius: 3px;"
+            )
+        else:
+            status_stage_label.setText(
+                "⚠️  Atenção: Inicie a análise antes de editar o estágio"
+            )
+            status_stage_label.setStyleSheet(
+                "color: #e67e22; font-weight: bold; padding: 5px; "
+                "background-color: #fdebd0; border-radius: 3px;"
+            )
+        status_stage_label.setAlignment(Qt.AlignCenter)
+        status_stage_label.setWordWrap(True)
+        main_layout.addWidget(status_stage_label)
+
         # Botão de Reset
         reset_button_container = QHBoxLayout()
         reset_button_container.addStretch()
@@ -654,8 +680,21 @@ class EditTaktDialog(QDialog):
             QPushButton:pressed {
                 background-color: #ba4a00;
             }
+            QPushButton:disabled {
+                background-color: #bdc3c7;
+                color: #7f8c8d;
+            }
         """
         )
+        
+        # Desabilitar botão se análise não está rodando
+        self.edit_takt_stage.setEnabled(analysis_running_stage)
+        if not analysis_running_stage:
+            self.edit_takt_stage.setToolTip(
+                "Inicie a análise (botão 'Iniciar Análise' na tela principal) "
+                "para habilitar esta função. É necessário conexão MQTT ativa."
+            )
+        
         self.edit_takt_stage.clicked.connect(self.on_edit_stage)
         reset_button_container.addWidget(self.edit_takt_stage)
         reset_button_container.addStretch()
@@ -724,6 +763,32 @@ class EditTaktDialog(QDialog):
         connection_group.setLayout(connection_layout)
         main_layout.addWidget(connection_group)
 
+        # Verificar se a análise está rodando
+        analysis_running = False
+        if self.parent() and hasattr(self.parent(), '_worker_thread'):
+            worker_thread = self.parent()._worker_thread
+            analysis_running = worker_thread is not None and worker_thread.isRunning()
+        
+        # Label de status da análise
+        status_info_label = QLabel()
+        if analysis_running:
+            status_info_label.setText("✅ Sistema conectado - Pronto para atualizar")
+            status_info_label.setStyleSheet(
+                "color: #27ae60; font-weight: bold; padding: 5px; "
+                "background-color: #d5f4e6; border-radius: 3px;"
+            )
+        else:
+            status_info_label.setText(
+                "⚠️  Atenção: Inicie a análise antes de atualizar a conexão"
+            )
+            status_info_label.setStyleSheet(
+                "color: #e67e22; font-weight: bold; padding: 5px; "
+                "background-color: #fdebd0; border-radius: 3px;"
+            )
+        status_info_label.setAlignment(Qt.AlignCenter)
+        status_info_label.setWordWrap(True)
+        main_layout.addWidget(status_info_label)
+
         # Botão de atualização da conexão
         update_connection_container = QHBoxLayout()
         update_connection_container.addStretch()
@@ -748,9 +813,21 @@ class EditTaktDialog(QDialog):
             QPushButton:pressed {
                 background-color: #cc7a00;
             }
+            QPushButton:disabled {
+                background-color: #bdc3c7;
+                color: #7f8c8d;
+            }
         """
         )
-        # Botão será conectado posteriormente conforme instrução do usuário
+        
+        # Desabilitar botão se análise não está rodando
+        self.update_connection_btn.setEnabled(analysis_running)
+        if not analysis_running:
+            self.update_connection_btn.setToolTip(
+                "Inicie a análise (botão 'Iniciar Análise' na tela principal) "
+                "para habilitar esta função. É necessário conexão MQTT ativa."
+            )
+        
         self.update_connection_btn.clicked.connect(self.update_takt_connection_id)
         update_connection_container.addWidget(self.update_connection_btn)
         update_connection_container.addStretch()
@@ -786,7 +863,41 @@ class EditTaktDialog(QDialog):
 
     def on_edit_stage(self):
         """Atualiza o contador do takt e envia mensagem MQTT"""
-        logger.info("Atualização do contador de takt solicitado")
+        logger.info("[EDIT_STAGE] Atualização do contador de takt solicitado")
+        
+        # Guard Clause: Verificar se a análise está rodando
+        if not self.parent() or not hasattr(self.parent(), '_worker_thread'):
+            logger.error("[EDIT_STAGE] ❌ BLOQUEADO: Parent ou worker thread não disponível")
+            QMessageBox.warning(
+                self,
+                "Sistema Não Iniciado",
+                "⚠️ A análise não foi iniciada ainda.\n\n"
+                "Para editar o estágio do takt, você precisa:\n"
+                "1. Fechar este diálogo\n"
+                "2. Clicar em '▶️ Iniciar Análise' na tela principal\n"
+                "3. Aguardar a conexão MQTT ser estabelecida\n"
+                "4. Abrir novamente este diálogo\n\n"
+                "A conexão MQTT é necessária para enviar o comando ao ESP32."
+            )
+            return
+        
+        worker_thread = self.parent()._worker_thread
+        if not worker_thread or not worker_thread.isRunning():
+            logger.error("[EDIT_STAGE] ❌ BLOQUEADO: Worker thread não está em execução")
+            QMessageBox.warning(
+                self,
+                "Sistema Não Iniciado",
+                "⚠️ A análise não está em execução.\n\n"
+                "Para editar o estágio do takt, você precisa:\n"
+                "1. Fechar este diálogo\n"
+                "2. Clicar em '▶️ Iniciar Análise' na tela principal\n"
+                "3. Aguardar a conexão MQTT ser estabelecida\n"
+                "4. Abrir novamente este diálogo\n\n"
+                "A conexão MQTT é necessária para enviar o comando ao ESP32."
+            )
+            return
+        
+        logger.debug("[EDIT_STAGE] ✅ Verificação inicial passou - sistema está pronto")
 
         # Confirmação do usuário
         reply = QMessageBox.question(
@@ -824,7 +935,41 @@ class EditTaktDialog(QDialog):
 
     def update_takt_connection_id(self):
         """Atualiza o ID de conexão do dispositivo Takt (célula e fábrica)"""
-        logger.info("Atualização do ID de conexão Takt solicitada")
+        logger.info("[UPDATE_ID] Atualização do ID de conexão Takt solicitada")
+        
+        # Guard Clause: Verificar se a análise está rodando
+        if not self.parent() or not hasattr(self.parent(), '_worker_thread'):
+            logger.error("[UPDATE_ID] ❌ BLOQUEADO: Parent ou worker thread não disponível")
+            QMessageBox.warning(
+                self,
+                "Sistema Não Iniciado",
+                "⚠️ A análise não foi iniciada ainda.\n\n"
+                "Para atualizar o ID de conexão, você precisa:\n"
+                "1. Fechar este diálogo\n"
+                "2. Clicar em '▶️ Iniciar Análise' na tela principal\n"
+                "3. Aguardar a conexão MQTT ser estabelecida\n"
+                "4. Abrir novamente este diálogo\n\n"
+                "A conexão MQTT é necessária para enviar o comando ao ESP32."
+            )
+            return
+        
+        worker_thread = self.parent()._worker_thread
+        if not worker_thread or not worker_thread.isRunning():
+            logger.error("[UPDATE_ID] ❌ BLOQUEADO: Worker thread não está em execução")
+            QMessageBox.warning(
+                self,
+                "Sistema Não Iniciado",
+                "⚠️ A análise não está em execução.\n\n"
+                "Para atualizar o ID de conexão, você precisa:\n"
+                "1. Fechar este diálogo\n"
+                "2. Clicar em '▶️ Iniciar Análise' na tela principal\n"
+                "3. Aguardar a conexão MQTT ser estabelecida\n"
+                "4. Abrir novamente este diálogo\n\n"
+                "A conexão MQTT é necessária para enviar o comando ao ESP32."
+            )
+            return
+        
+        logger.debug("[UPDATE_ID] ✅ Verificação inicial passou - sistema está pronto")
         
         # Solicitar autenticação - usuário
         username, ok = QInputDialog.getText(
@@ -891,10 +1036,32 @@ class EditTaktDialog(QDialog):
             logger.debug("Atualização de ID cancelada pelo usuário")
             return
 
+        logger.info(f"[UPDATE_ID] Iniciando processo de atualização - Factory: {new_factory}, Cell: {new_cell}")
+        
         # Enviar comando MQTT para atualizar o ESP32 ANTES de salvar
-        self._send_device_id_update_mqtt(new_factory, new_cell, new_device_id)
+        logger.info("[UPDATE_ID] Passo 1/3: Enviando comando MQTT ao ESP32...")
+        mqtt_success = self._send_device_id_update_mqtt(new_factory, new_cell, new_device_id)
+        
+        # Guard Clause: Só continuar se o envio MQTT foi bem-sucedido
+        if not mqtt_success:
+            logger.error(f"[UPDATE_ID] ❌ ABORTADO: Falha ao enviar comando MQTT. Configuração NÃO será salva.")
+            QMessageBox.critical(
+                self,
+                "Atualização Cancelada",
+                f"Não foi possível enviar o comando ao ESP32.\n\n"
+                f"A configuração NÃO foi atualizada para evitar inconsistências.\n\n"
+                f"Por favor, verifique:\n"
+                f"• Se o sistema de análise está iniciado\n"
+                f"• Se a conexão MQTT está ativa\n"
+                f"• Se o dispositivo ESP32 está online\n\n"
+                f"Tente novamente após verificar estes pontos."
+            )
+            return
+        
+        logger.info("[UPDATE_ID] ✅ Passo 1/3: Comando MQTT enviado com sucesso")
         
         # Carregar configuração atual
+        logger.info("[UPDATE_ID] Passo 2/3: Salvando configuração local...")
         config = load_config()
         
         # Atualizar valores de device
@@ -907,33 +1074,47 @@ class EditTaktDialog(QDialog):
         # Salvar configuração atualizada
         try:
             save_config(config)
-            logger.info(f"Configuração atualizada com sucesso - Factory: {new_factory}, Cell: {new_cell}")
+            logger.info(f"[UPDATE_ID] ✅ Passo 2/3: Configuração salva - Factory: {new_factory}, Cell: {new_cell}")
         except Exception as e:
-            logger.error(f"Erro ao salvar configuração atualizada: {e}", exc_info=True)
+            logger.error(f"[UPDATE_ID] ❌ Erro ao salvar configuração: {e}", exc_info=True)
             QMessageBox.critical(
                 self,
                 "Erro ao Salvar",
-                f"Não foi possível salvar a configuração:\n{e}"
+                f"ATENÇÃO: O comando foi enviado ao ESP32, mas não foi possível salvar a configuração local!\n\n"
+                f"Erro: {e}\n\n"
+                f"Recomenda-se reiniciar a aplicação e tentar novamente."
             )
             return
         
         # Atualizar a UI do parent se disponível
+        logger.info("[UPDATE_ID] Passo 3/3: Atualizando interface...")
         if self.parent() and hasattr(self.parent(), '_load'):
             self.parent()._load()
+            logger.debug("[UPDATE_ID] Interface do parent atualizada")
+        
+        logger.info(f"[UPDATE_ID] ✅ CONCLUÍDO: ID atualizado com sucesso para {new_device_id}")
         
         QMessageBox.information(
             self,
-            "ID Atualizado",
-            f"ID de conexão atualizado com sucesso!\n\n"
-            f"Novo Device ID: {new_device_id}\n\n"
-            f"Comando enviado ao ESP32.\n"
+            "ID Atualizado com Sucesso",
+            f"✅ ID de conexão atualizado com sucesso!\n\n"
+            f"Novo Device ID: {new_device_id}\n"
+            f"Fábrica: {new_factory}\n"
+            f"Célula: {new_cell}\n\n"
+            f"✅ Comando enviado e confirmado pelo ESP32\n"
+            f"✅ Configuração salva localmente\n\n"
             f"Considere reiniciar a aplicação para garantir que todas as conexões sejam atualizadas."
         )
-        
-        logger.info("Atualização de ID de conexão concluída")
     
-    def _send_device_id_update_mqtt(self, factory: str, cell: str, device_id: str):
-        """Envia mensagem MQTT de atualização do device_id para o ESP32"""
+    def _send_device_id_update_mqtt(self, factory: str, cell: str, device_id: str) -> bool:
+        """Envia mensagem MQTT de atualização do device_id para o ESP32
+        
+        Returns:
+            bool: True se a mensagem foi enviada com sucesso, False caso contrário
+        """
+        logger.info(f"[MQTT_SEND] Iniciando envio de atualização de device_id: {device_id}")
+        logger.debug(f"[MQTT_SEND] Parâmetros - Factory: {factory}, Cell: {cell}")
+        
         try:
             import json
             from datetime import datetime
@@ -946,57 +1127,97 @@ class EditTaktDialog(QDialog):
                 "cell_number": cell,
                 "device_id": device_id
             }
+            logger.debug(f"[MQTT_SEND] Mensagem preparada: {message}")
 
-            # Verifica se há worker thread rodando com conexão MQTT
-            if self.parent() and hasattr(self.parent(), '_worker_thread'):
-                worker_thread = self.parent()._worker_thread
-                if worker_thread and worker_thread.isRunning():
-                    mqtt_manager = getattr(worker_thread, "_mqtt_manager", None)
-                    if mqtt_manager and mqtt_manager._connected:
-                        logger.info(
-                            f"Enviando atualização de device_id via MQTT para {device_id}: {message}"
-                        )
-
-                        # Usa publish_command do MQTTManager
-                        success = mqtt_manager.publish_command(device_id, message)
-
-                        if success:
-                            logger.info("Mensagem MQTT de atualização de device_id enviada com sucesso")
-                        else:
-                            logger.warning("Falha ao enviar mensagem MQTT de atualização de device_id")
-                            QMessageBox.warning(
-                                self,
-                                "Erro ao Enviar",
-                                "Não foi possível enviar o comando ao ESP32.\n\n"
-                                "Verifique a conexão MQTT.",
-                            )
-                    else:
-                        logger.warning(
-                            "MQTT Manager não está conectado. Mensagem não enviada."
-                        )
-                        QMessageBox.warning(
-                            self,
-                            "MQTT Desconectado",
-                            "O sistema não está conectado ao broker MQTT.\n\n"
-                            "A configuração foi salva, mas o comando não foi enviado ao ESP32.\n"
-                            "Por favor, inicie a análise para conectar ao MQTT.",
-                        )
-                else:
-                    logger.info(
-                        "Worker thread não está rodando. Configuração salva, mas comando MQTT não enviado."
-                    )
-            else:
-                logger.info(
-                    "Parent window ou worker thread não disponível. Configuração salva localmente."
+            # Guard Clause 1: Verificar se parent existe
+            if not self.parent():
+                logger.error("[MQTT_SEND] ❌ FALHA: Parent window não disponível")
+                QMessageBox.warning(
+                    self,
+                    "Erro de Sistema",
+                    "Janela principal não está disponível.\n\n"
+                    "Por favor, tente novamente ou reinicie a aplicação.",
                 )
+                return False
+            
+            # Guard Clause 2: Verificar se parent tem _worker_thread
+            if not hasattr(self.parent(), '_worker_thread'):
+                logger.error("[MQTT_SEND] ❌ FALHA: Worker thread não existe no parent")
+                QMessageBox.warning(
+                    self,
+                    "Sistema Não Iniciado",
+                    "O sistema de análise não foi iniciado ainda.\n\n"
+                    "Por favor, inicie a análise antes de atualizar o ID de conexão.",
+                )
+                return False
+            
+            worker_thread = self.parent()._worker_thread
+            
+            # Guard Clause 3: Verificar se worker thread está rodando
+            if not worker_thread or not worker_thread.isRunning():
+                logger.error("[MQTT_SEND] ❌ FALHA: Worker thread não está em execução")
+                QMessageBox.warning(
+                    self,
+                    "Sistema Não Iniciado",
+                    "O sistema de análise não está em execução.\n\n"
+                    "Por favor, inicie a análise antes de atualizar o ID de conexão.",
+                )
+                return False
+            
+            logger.debug("[MQTT_SEND] Worker thread encontrada e em execução")
+            
+            # Guard Clause 4: Verificar se mqtt_manager existe
+            mqtt_manager = getattr(worker_thread, "_mqtt_manager", None)
+            if not mqtt_manager:
+                logger.error("[MQTT_SEND] ❌ FALHA: MQTT Manager não encontrado no worker thread")
+                QMessageBox.warning(
+                    self,
+                    "MQTT Não Configurado",
+                    "O gerenciador MQTT não está disponível.\n\n"
+                    "Por favor, verifique a configuração e reinicie a análise.",
+                )
+                return False
+            
+            logger.debug("[MQTT_SEND] MQTT Manager encontrado")
+            
+            # Guard Clause 5: Verificar se está conectado
+            if not mqtt_manager._connected:
+                logger.error("[MQTT_SEND] ❌ FALHA: MQTT Manager não está conectado ao broker")
+                QMessageBox.warning(
+                    self,
+                    "MQTT Desconectado",
+                    "O sistema não está conectado ao broker MQTT.\n\n"
+                    "Por favor, verifique a conexão de rede e reinicie a análise.",
+                )
+                return False
+            
+            logger.info(f"[MQTT_SEND] ✅ MQTT conectado. Enviando comando para device_id: {device_id}")
+            
+            # Tentar enviar o comando
+            success = mqtt_manager.publish_command(device_id, message)
+
+            if success:
+                logger.info(f"[MQTT_SEND] ✅ SUCESSO: Mensagem MQTT enviada para {device_id}")
+                return True
+            else:
+                logger.error(f"[MQTT_SEND] ❌ FALHA: publish_command retornou False para {device_id}")
+                QMessageBox.warning(
+                    self,
+                    "Erro ao Enviar",
+                    "Não foi possível enviar o comando ao ESP32.\n\n"
+                    "Verifique a conexão MQTT e tente novamente.",
+                )
+                return False
 
         except Exception as e:
-            logger.error(f"Erro ao enviar mensagem MQTT de atualização de device_id: {e}", exc_info=True)
+            logger.error(f"[MQTT_SEND] ❌ EXCEÇÃO: Erro inesperado ao enviar mensagem MQTT: {e}", exc_info=True)
             QMessageBox.warning(
                 self,
-                "Erro",
-                f"Erro ao enviar comando MQTT:\n{e}\n\nA configuração foi salva localmente.",
+                "Erro de Comunicação",
+                f"Erro ao enviar comando MQTT:\n{e}\n\n"
+                f"Por favor, verifique a conexão e tente novamente.",
             )
+            return False
     
     def get_takt_value(self):
         """Retorna o valor do takt definido"""
@@ -1325,6 +1546,40 @@ class MainWindow(QWidget):
 
         layout.addLayout(init_status_layout)
 
+        # Botão para controlar Worker MQTT isoladamente (canto inferior esquerdo)
+        worker_control_layout = QHBoxLayout()
+        
+        self.worker_mqtt_btn = QPushButton("🔌 Iniciar Worker MQTT")
+        self.worker_mqtt_btn.setFixedHeight(35)
+        self.worker_mqtt_btn.setFixedWidth(180)
+        self.worker_mqtt_btn.setStyleSheet(
+            """
+            QPushButton {
+                background-color: #16a085;
+                color: white;
+                padding: 5px 15px;
+                border: none;
+                border-radius: 4px;
+                font-weight: bold;
+                font-size: 9pt;
+            }
+            QPushButton:hover {
+                background-color: #138d75;
+            }
+            QPushButton:pressed {
+                background-color: #117a65;
+            }
+        """
+        )
+        self.worker_mqtt_btn.setToolTip(
+            "Inicia/Para o Worker MQTT sem necessidade de iniciar a análise completa"
+        )
+        self.worker_mqtt_btn.clicked.connect(self.on_toggle_worker_mqtt)
+        worker_control_layout.addWidget(self.worker_mqtt_btn)
+        worker_control_layout.addStretch()
+        
+        layout.addLayout(worker_control_layout)
+
         self.setLayout(layout)
         self.setMinimumWidth(600)
         self.setMinimumHeight(500)
@@ -1489,6 +1744,162 @@ class MainWindow(QWidget):
             # Reabilita o botão se não conseguiu iniciar a thread
             self.reconnect_mqtt_btn.setEnabled(True)
             self.reconnect_mqtt_btn.setText("🔄 Reconectar MQTT")
+
+    def on_toggle_worker_mqtt(self):
+        """Inicia ou para o Worker MQTT isoladamente"""
+        if self._worker_thread is not None and self._worker_thread.isRunning():
+            # Parar o worker
+            logger.info("[WORKER_MQTT] Solicitando parada do Worker MQTT")
+            
+            # Verificar se a análise está rodando
+            if self._analysis_running:
+                logger.warning("[WORKER_MQTT] ⚠️ Análise está em execução - não pode parar o worker")
+                QMessageBox.warning(
+                    self,
+                    "Análise em Execução",
+                    "⚠️ Não é possível parar o Worker MQTT enquanto a análise está em execução.\n\n"
+                    "Para parar o worker:\n"
+                    "1. Pare a análise primeiro (botão '⏸️ Parar Análise')\n"
+                    "2. Depois pare o Worker MQTT"
+                )
+                return
+            
+            reply = QMessageBox.question(
+                self,
+                "Confirmar Parada do Worker",
+                "Tem certeza que deseja parar o Worker MQTT?\n\n"
+                "Isso irá desconectar do broker MQTT e impedir:\n"
+                "• Envio de comandos ao ESP32\n"
+                "• Atualização de ID de conexão\n"
+                "• Edição de estágios do takt\n\n"
+                "Você pode reiniciá-lo a qualquer momento.",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No,
+            )
+            
+            if reply == QMessageBox.No:
+                logger.debug("[WORKER_MQTT] Parada do worker cancelada pelo usuário")
+                return
+            
+            self.worker_mqtt_btn.setEnabled(False)
+            self.worker_mqtt_btn.setText("⏳ Parando...")
+            
+            try:
+                self._worker_thread.stop()
+                self._worker_thread.wait(5000)  # aguarda até 5s
+                logger.info("[WORKER_MQTT] ✅ Worker MQTT parado com sucesso")
+                
+                # Atualizar status MQTT
+                self.mqtt_status_label.setText("🔴 MQTT: Desconectado")
+                self.mqtt_status_label.setStyleSheet(
+                    "padding: 5px; font-size: 10pt; color: #e74c3c;"
+                )
+                
+                QMessageBox.information(
+                    self,
+                    "Worker Parado",
+                    "✅ Worker MQTT foi parado com sucesso.\n\n"
+                    "Você pode reiniciá-lo clicando no botão 'Iniciar Worker MQTT'."
+                )
+            except Exception as e:
+                logger.error(f"[WORKER_MQTT] ❌ Erro ao parar worker: {e}", exc_info=True)
+                QMessageBox.critical(
+                    self,
+                    "Erro ao Parar Worker",
+                    f"Ocorreu um erro ao parar o Worker MQTT:\n{e}\n\n"
+                    f"Tente reiniciar a aplicação."
+                )
+            finally:
+                self._update_worker_button_state()
+        else:
+            # Iniciar o worker
+            logger.info("[WORKER_MQTT] Solicitando início do Worker MQTT")
+            
+            self.worker_mqtt_btn.setEnabled(False)
+            self.worker_mqtt_btn.setText("⏳ Iniciando...")
+            
+            try:
+                logger.debug("[WORKER_MQTT] Criando e iniciando AsyncWorker thread")
+                self._worker_thread = AsyncWorker(self)
+                self._worker_thread.set_device_status_callback(
+                    self._on_device_status_changed
+                )
+                self._worker_thread.status_update.connect(self.on_worker_status_update)
+                self._worker_thread.start()
+                logger.info("[WORKER_MQTT] ✅ Worker MQTT iniciado com sucesso")
+                
+                QMessageBox.information(
+                    self,
+                    "Worker Iniciado",
+                    "✅ Worker MQTT foi iniciado com sucesso.\n\n"
+                    "Aguarde alguns segundos para a conexão ser estabelecida.\n"
+                    "O status será atualizado automaticamente."
+                )
+            except Exception as e:
+                logger.error(f"[WORKER_MQTT] ❌ Erro ao iniciar worker: {e}", exc_info=True)
+                QMessageBox.critical(
+                    self,
+                    "Erro ao Iniciar Worker",
+                    f"Ocorreu um erro ao iniciar o Worker MQTT:\n{e}\n\n"
+                    f"Verifique as configurações e tente novamente."
+                )
+            finally:
+                self._update_worker_button_state()
+    
+    def _update_worker_button_state(self):
+        """Atualiza o estado visual do botão do Worker MQTT"""
+        if self._worker_thread is not None and self._worker_thread.isRunning():
+            self.worker_mqtt_btn.setEnabled(True)
+            self.worker_mqtt_btn.setText("🔌 Parar Worker MQTT")
+            self.worker_mqtt_btn.setStyleSheet(
+                """
+                QPushButton {
+                    background-color: #e74c3c;
+                    color: white;
+                    padding: 5px 15px;
+                    border: none;
+                    border-radius: 4px;
+                    font-weight: bold;
+                    font-size: 9pt;
+                }
+                QPushButton:hover {
+                    background-color: #c0392b;
+                }
+                QPushButton:pressed {
+                    background-color: #a93226;
+                }
+            """
+            )
+            self.worker_mqtt_btn.setToolTip(
+                "Clique para parar o Worker MQTT (não disponível durante análise)"
+            )
+            logger.debug("[WORKER_MQTT] Botão atualizado - Estado: RODANDO (vermelho)")
+        else:
+            self.worker_mqtt_btn.setEnabled(True)
+            self.worker_mqtt_btn.setText("🔌 Iniciar Worker MQTT")
+            self.worker_mqtt_btn.setStyleSheet(
+                """
+                QPushButton {
+                    background-color: #16a085;
+                    color: white;
+                    padding: 5px 15px;
+                    border: none;
+                    border-radius: 4px;
+                    font-weight: bold;
+                    font-size: 9pt;
+                }
+                QPushButton:hover {
+                    background-color: #138d75;
+                }
+                QPushButton:pressed {
+                    background-color: #117a65;
+                }
+            """
+            )
+            self.worker_mqtt_btn.setToolTip(
+                "Inicia o Worker MQTT sem necessidade de iniciar a análise completa"
+            )
+            logger.debug("[WORKER_MQTT] Botão atualizado - Estado: PARADO (verde)")
 
     def _check_prerequisites(self):
         """Verifica se modelo e MQTT estão disponíveis antes de habilitar análise"""
@@ -1709,7 +2120,16 @@ class MainWindow(QWidget):
             self.configure_btn.setEnabled(False)
 
             # Iniciar worker em thread separada
-            if self._worker_thread is None or not self._worker_thread.isRunning():
+            # Verificar se worker já não está rodando para evitar múltiplas instâncias
+            if self._worker_thread is not None and self._worker_thread.isRunning():
+                logger.warning("⚠️ AsyncWorker thread já está em execução - não será criado novamente")
+                QMessageBox.information(
+                    self,
+                    "Worker Já Iniciado",
+                    "O Worker MQTT já está em execução.\n\n"
+                    "A análise será iniciada usando o worker existente."
+                )
+            else:
                 logger.debug("Criando e iniciando AsyncWorker thread")
                 self._worker_thread = AsyncWorker(self)
                 # Conecta o sinal do worker para atualizar o label na UI
@@ -1718,9 +2138,10 @@ class MainWindow(QWidget):
                 )
                 self._worker_thread.status_update.connect(self.on_worker_status_update)
                 self._worker_thread.start()
-                logger.info("AsyncWorker thread iniciado")
-            else:
-                logger.warning("AsyncWorker thread já está em execução")
+                logger.info("AsyncWorker thread iniciado para análise")
+                
+                # Atualizar botão do worker MQTT
+                self._update_worker_button_state()
         else:
             # parar
             logger.info("Parando análise...")
@@ -1754,11 +2175,9 @@ class MainWindow(QWidget):
             )
             self.configure_btn.setEnabled(True)
             # Solicitar parada do worker e aguardar finalizar
-            if self._worker_thread and self._worker_thread.isRunning():
-                logger.debug("Solicitando parada do AsyncWorker thread")
-                self._worker_thread.stop()
-                self._worker_thread.wait(5000)  # aguarda até 5s
-                logger.info("AsyncWorker thread parado")
+            # NOTA: Não para o worker aqui se foi iniciado isoladamente
+            # O worker continua rodando para permitir comandos MQTT sem análise
+            logger.info("Análise parada - Worker MQTT continua rodando para comandos")
 
     def on_worker_status_update(self, data: dict):
         event = data.get("event")
@@ -1777,6 +2196,9 @@ class MainWindow(QWidget):
             self.reconnect_mqtt_btn.setToolTip(
                 "Reconectar ao broker MQTT (disponível apenas quando desconectado)"
             )
+            
+            # Atualizar botão do Worker MQTT
+            self._update_worker_button_state()
 
             # Atualizar status do ESP32 para "aguardando" APENAS se ainda estiver no estado inicial
             if (
@@ -1802,6 +2224,9 @@ class MainWindow(QWidget):
             self.reconnect_mqtt_btn.setToolTip(
                 "Clique para tentar reconectar ao broker MQTT"
             )
+            
+            # Atualizar botão do Worker MQTT
+            self._update_worker_button_state()
 
             # Para a análise ANTES de mostrar o dialog para evitar loop
             if self._analysis_running:
