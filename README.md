@@ -798,6 +798,100 @@ Após a compilação:
 ```
 dist/takttime-tracker/
 ├── takttime-tracker          # Executável principal
+
+## Guia Rápido (Informações adicionais)
+
+As seções abaixo reúnem informações práticas que complementam o conteúdo acima.
+
+**Requisitos do Sistema (Linux)**:
+- Python 3.8+ (recomendado 3.10/3.12)
+- Tesseract OCR (binário em `/usr/bin/tesseract` ou caminho equivalente)
+- Dependências do sistema para OpenCV/torch (drivers NVIDIA se for usar GPU)
+
+**Instalação Rápida (Linux)**
+
+```bash
+# No diretório do projeto
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+
+# Instale o Tesseract (Debian/Ubuntu)
+sudo apt update
+sudo apt install -y tesseract-ocr libgl1
+
+# Ajuste se o binário tesseract estiver em local diferente
+export TESSERACT_CMD=/usr/bin/tesseract
+```
+
+**Executando a aplicação (desenvolvimento)**
+
+```bash
+# Ative o virtualenv
+source .venv/bin/activate
+# Execute a interface gráfica (PyQt5)
+python app.py
+```
+
+**Executável (produção)**
+
+Se você usou `./build.sh` ou o processo de build, o executável gerado está em `dist/takttime-tracker/`.
+
+```bash
+cd dist/takttime-tracker/
+./takttime-tracker
+```
+
+**Arquivo de Configuração**
+
+- O arquivo principal de configuração é `config/config.json`.
+- Atenção: ele contém credenciais MQTT e outras informações sensíveis. Não o publique em repositórios públicos.
+- Preferível usar mecanismos de segredos em produção (variáveis de ambiente, vaults) e manter um exemplo `config.example.json` sem credenciais.
+
+**Variáveis de Ambiente úteis**
+
+- `AMQP_URL` : quando definido, `main.py` usa esta URL para conexão AMQP/RabbitMQ.
+- `TESSERACT_CMD` : caso o binário do tesseract não esteja em `/usr/bin/tesseract`, exporte esse caminho antes de iniciar.
+
+**Rodando apenas o detector (headless / debug)**
+
+O módulo `main.py` contém o loop de detecção e pode ser executado diretamente para testes. Ele espera receber um objeto `MQTTManager` quando usado junto com a UI; isoladamente ele pode ser usado para validar o modelo e OCR:
+
+```bash
+# Execução de teste (pode requerer ajustes de ambiente)
+python main.py
+```
+
+**Build / Compilação**
+
+- O script principal de build é `scripts/build.sh`. Ele invoca o PyInstaller com a spec apropriada.
+- Antes de rodar o build, certifique-se de que `tesseract` está instalado no sistema e que o modelo (`assets/train_2025.pt`) está acessível.
+
+**Segurança**
+
+- `config/config.json` contém credenciais (`mqtt_user`, `mqtt_pass`). Em ambientes reais, remova credenciais do repositório e utilize variáveis de ambiente ou serviços de segredo.
+- A comunicação MQTT no projeto atual não usa TLS por padrão — considere habilitar TLS/SSL no broker em ambientes sensíveis.
+
+**Testes**
+
+- Não há uma suíte de testes automatizados incluída neste repositório. Para validar mudanças, rode manualmente o aplicativo com o `--verbose` e verifique `logs/main_debug.log` e `logs/app_debug.log`.
+
+**Contribuição e Contato**
+
+- Abra issues para bugs e solicitações de features no repositório.
+- Para contribuições via PR, crie uma branch com mudanças pequenas e documente o que foi alterado.
+
+**Licença**
+
+- Nenhuma licença foi definida no repositório. Se este projeto for distribuído, adicione um arquivo `LICENSE` com a licença desejada (por exemplo MIT) e atualize este README.
+
+---
+
+Se quiser, posso também:
+- Adicionar um `config.example.json` sem credenciais
+- Criar um `LICENSE` (ex.: MIT)
+- Gerar um pequeno `quick_start.sh` que automatiza a criação do virtualenv e instalação
+
 ├── train_2025.pt             # Modelo YOLO
 ├── config/                   # Configurações
 │   └── config.json          # Criado na primeira execução
