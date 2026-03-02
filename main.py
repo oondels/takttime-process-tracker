@@ -251,6 +251,16 @@ async def main(
             if iteration % 100 == 0:
                 logger.debug(f"Loop de detecção - Iteração: {iteration}")
 
+            # Atualiza device_id ativo dinamicamente (sem exigir restart da análise)
+            if is_mqtt_manager and hasattr(connection, "get_primary_device_id"):
+                active_device_id = connection.get_primary_device_id()
+                if active_device_id and active_device_id != DEVICE_ID_ACTUAL:
+                    logger.info(
+                        f"Device ID ativo atualizado em runtime: "
+                        f"{DEVICE_ID_ACTUAL} -> {active_device_id}"
+                    )
+                    DEVICE_ID_ACTUAL = active_device_id
+
             screen = ImageGrab.grab()
             screen_np = np.array(screen)
             frame = cv2.cvtColor(screen_np, cv2.COLOR_RGB2BGR)

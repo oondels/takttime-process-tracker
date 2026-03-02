@@ -20,6 +20,7 @@ class DeviceStatus:
         self.last_heartbeat: Optional[dict] = None
         self.status_topic = f"takt/device/{device_id}/status"
         self.heartbeat_topic = f"takt/device/{device_id}/heartbeat"
+        self.ack_topic = f"takt/device/{device_id}/ack"
         self.command_topic = f"takt/device/{device_id}"
 
 
@@ -46,6 +47,10 @@ class MQTTManager:
         self.on_status_change_callback: Optional[Callable] = None
         self._connected = False
         self._connect_event = threading.Event()
+        self._devices_lock = threading.RLock()
+        self._primary_device_id: Optional[str] = None
+        self._id_update_ack_events: Dict[str, threading.Event] = {}
+        self._last_id_update_ack: Dict[str, dict] = {}
 
         # Configurar callbacks
         self.client.on_connect = self._on_connect
@@ -57,15 +62,106 @@ class MQTTManager:
 
     def add_device(self, device_id: str):
         """Adiciona um dispositivo para monitoramento"""
-        if device_id not in self.devices:
+        with self._devices_lock:
+            if device_id in self.devices:
+                logger.warning(f"Dispositivo {device_id} já está adicionado.")
+                return
+
             new_device = DeviceStatus(device_id)
             self.devices[device_id] = new_device
-            logger.info(f"📱 Dispositivo adicionado: {device_id}")
-            logger.debug(f"   Status Topic: {new_device.status_topic}")
-            logger.debug(f"   Heartbeat Topic: {new_device.heartbeat_topic}")
-            logger.debug(f"   Command Topic: {new_device.command_topic}")
-        else:
-            logger.warning(f"Dispositivo {device_id} já está adicionado.")
+            self._id_update_ack_events.setdefault(device_id, threading.Event())
+            if not self._primary_device_id:
+                self._primary_device_id = device_id
+
+        logger.info(f"📱 Dispositivo adicionado: {device_id}")
+        logger.debug(f"   Status Topic: {new_device.status_topic}")
+        logger.debug(f"   Heartbeat Topic: {new_device.heartbeat_topic}")
+        logger.debug(f"   Ack Topic: {new_device.ack_topic}")
+        logger.debug(f"   Command Topic: {new_device.command_topic}")
+
+        if self._connected:
+            self.client.subscribe(new_device.status_topic)
+            self.client.subscribe(new_device.heartbeat_topic)
+            self.client.subscribe(new_device.ack_topic)
+            logger.info(f"Inscrito em: {new_device.status_topic}")
+            logger.info(f"Inscrito em: {new_device.heartbeat_topic}")
+            logger.info(f"Inscrito em: {new_device.ack_topic}")
+
+    def remove_device(self, device_id: str):
+        """Remove um dispositivo do monitoramento"""
+        with self._devices_lock:
+            device = self.devices.pop(device_id, None)
+            self._id_update_ack_events.pop(device_id, None)
+            self._last_id_update_ack.pop(device_id, None)
+            if self._primary_device_id == device_id:
+                self._primary_device_id = next(iter(self.devices.keys()), None)
+
+        if not device:
+            return
+
+        if self._connected:
+            self.client.unsubscribe(device.status_topic)
+            self.client.unsubscribe(device.heartbeat_topic)
+            self.client.unsubscribe(device.ack_topic)
+        logger.info(f"🗑️ Dispositivo removido: {device_id}")
+
+    def set_primary_device(self, device_id: str) -> bool:
+        """Define dispositivo principal usado para comandos e status"""
+        with self._devices_lock:
+            if device_id not in self.devices:
+                logger.error(f"Não é possível definir primário: dispositivo {device_id} não existe")
+                return False
+            self._primary_device_id = device_id
+        logger.info(f"🎯 Dispositivo primário atualizado para: {device_id}")
+        return True
+
+    def get_primary_device_id(self) -> Optional[str]:
+        """Retorna o device_id primário atual"""
+        with self._devices_lock:
+            return self._primary_device_id
+
+    def switch_primary_device(self, old_device_id: str, new_device_id: str):
+        """Troca o dispositivo primário para um novo ID e remove o antigo."""
+        if not new_device_id:
+            return
+
+        self.add_device(new_device_id)
+        self.set_primary_device(new_device_id)
+
+        if old_device_id and old_device_id != new_device_id:
+            self.remove_device(old_device_id)
+
+    def prepare_device_id_update_ack_wait(self, new_device_id: str) -> float:
+        """Prepara evento de ACK para evitar race antes do publish."""
+        with self._devices_lock:
+            event = self._id_update_ack_events.setdefault(new_device_id, threading.Event())
+            event.clear()
+        return time.time()
+
+    def wait_for_device_id_update_ack(
+        self, new_device_id: str, min_timestamp: float = 0.0, timeout: float = 12.0
+    ) -> bool:
+        """Aguarda ACK explícito de atualização de device_id."""
+        with self._devices_lock:
+            ack = self._last_id_update_ack.get(new_device_id)
+            if ack and ack.get("status") == "ok" and ack.get("timestamp", 0) >= min_timestamp:
+                return True
+            event = self._id_update_ack_events.setdefault(new_device_id, threading.Event())
+
+        if not event.wait(timeout):
+            return False
+
+        with self._devices_lock:
+            ack = self._last_id_update_ack.get(new_device_id)
+            if not ack:
+                return False
+            return ack.get("status") == "ok" and ack.get("timestamp", 0) >= min_timestamp
+
+    def get_last_device_id_update_ack(self, new_device_id: str) -> Optional[dict]:
+        """Retorna último ACK de atualização de ID para inspeção."""
+        with self._devices_lock:
+            ack = self._last_id_update_ack.get(new_device_id)
+            return dict(ack) if ack else None
 
     def connect(self, timeout: int = 10) -> bool:
         """Conecta ao broker MQTT"""
@@ -108,11 +204,15 @@ class MQTTManager:
             logger.info("Conectado ao broker MQTT")
 
             # Inscrever nos tópicos de todos os dispositivos
-            for device_id, device in self.devices.items():
+            with self._devices_lock:
+                devices_snapshot = list(self.devices.values())
+            for device in devices_snapshot:
                 client.subscribe(device.status_topic)
                 client.subscribe(device.heartbeat_topic)
+                client.subscribe(device.ack_topic)
                 print(f"Inscrito em: {device.status_topic}")
                 print(f"Inscrito em: {device.heartbeat_topic}")
+                print(f"Inscrito em: {device.ack_topic}")
         else:
             self._connected = False
             self._connect_event.set()
@@ -141,12 +241,44 @@ class MQTTManager:
 
         # Encontrar dispositivo pelo tópico
         device = None
-        for dev in self.devices.values():
-            if topic == dev.status_topic or topic == dev.heartbeat_topic:
+        with self._devices_lock:
+            devices_snapshot = list(self.devices.values())
+        for dev in devices_snapshot:
+            if topic == dev.status_topic or topic == dev.heartbeat_topic or topic == dev.ack_topic:
                 device = dev
                 break
 
         if not device:
+            return
+
+        if topic == device.ack_topic:
+            try:
+                ack_data = json.loads(payload)
+            except json.JSONDecodeError:
+                logger.warning(f"⚠️  Ack inválido para {device.device_id}: {payload}")
+                return
+
+            if (
+                ack_data.get("event") == "device_config_ack"
+                and ack_data.get("message") == "update_device_id_ack"
+            ):
+                ack_new_id = ack_data.get("new_device_id") or ack_data.get("device_id") or device.device_id
+                ack_entry = {
+                    "timestamp": time.time(),
+                    "status": ack_data.get("status", ""),
+                    "old_device_id": ack_data.get("old_device_id"),
+                    "new_device_id": ack_new_id,
+                    "request_id": ack_data.get("request_id"),
+                }
+                with self._devices_lock:
+                    self._last_id_update_ack[ack_new_id] = ack_entry
+                    event = self._id_update_ack_events.setdefault(ack_new_id, threading.Event())
+                    event.set()
+
+                logger.info(
+                    f"📨 ACK update_device_id recebido: old={ack_entry['old_device_id']}, "
+                    f"new={ack_entry['new_device_id']}, status={ack_entry['status']}"
+                )
             return
 
         # Processar mensagem de status
@@ -198,7 +330,10 @@ class MQTTManager:
     def _monitor_devices(self):
         """Thread para monitorar timeout de dispositivos"""
         while self.monitoring:
-            for device in self.devices.values():
+            with self._devices_lock:
+                devices_snapshot = list(self.devices.values())
+
+            for device in devices_snapshot:
                 if device.last_seen:
                     timeout = datetime.now() - timedelta(seconds=self.timeout_seconds)
 
@@ -222,17 +357,20 @@ class MQTTManager:
 
     def is_device_connected(self, device_id: str) -> bool:
         """Verifica se um dispositivo está conectado"""
-        device = self.devices.get(device_id)
+        with self._devices_lock:
+            device = self.devices.get(device_id)
         return device.connected if device else False
 
     @property
     def device_status(self) -> Dict[str, bool]:
         """Retorna dicionário com status de conexão de todos os dispositivos"""
-        return {device_id: device.connected for device_id, device in self.devices.items()}
+        with self._devices_lock:
+            return {device_id: device.connected for device_id, device in self.devices.items()}
 
     def get_device_info(self, device_id: str) -> Optional[dict]:
         """Retorna informações do dispositivo"""
-        device = self.devices.get(device_id)
+        with self._devices_lock:
+            device = self.devices.get(device_id)
         if not device:
             return None
 
@@ -243,6 +381,7 @@ class MQTTManager:
             "last_heartbeat": device.last_heartbeat,
             "status_topic": device.status_topic,
             "heartbeat_topic": device.heartbeat_topic,
+            "ack_topic": device.ack_topic,
             "command_topic": device.command_topic,
         }
 
@@ -253,16 +392,25 @@ class MQTTManager:
             return False
 
         print(f"Publicando comando para {device_id}: {command}")
-        device = self.devices.get(device_id)
+        with self._devices_lock:
+            device = self.devices.get(device_id)
         
         # Se o device_id não existe, mas estamos tentando atualizar o device_id,
         # usar o primeiro (e provavelmente único) dispositivo registrado
         target_device = device
         if not device:
             # Verificar se é um comando de atualização de device_id
-            if command.get("message") == "update_device_id" and len(self.devices) > 0:
-                # Usar o primeiro dispositivo registrado (ID antigo)
-                target_device = list(self.devices.values())[0]
+            with self._devices_lock:
+                has_devices = len(self.devices) > 0
+                primary_id = self._primary_device_id
+                if primary_id and primary_id in self.devices:
+                    primary_device = self.devices[primary_id]
+                else:
+                    primary_device = next(iter(self.devices.values()), None)
+
+            if command.get("message") == "update_device_id" and has_devices:
+                # Usar o dispositivo primário (ID atual) para enviar atualização de ID
+                target_device = primary_device
                 logger.info(
                     f"⚠️  Device ID {device_id} não encontrado. "
                     f"Usando dispositivo registrado {target_device.device_id} para enviar atualização de ID."
