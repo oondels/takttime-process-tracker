@@ -1106,13 +1106,26 @@ class EditTaktDialog(QDialog):
             f"Considere reiniciar a aplicação para garantir que todas as conexões sejam atualizadas."
         )
     
-    def _send_device_id_update_mqtt(self, factory: str, cell: str, device_id: str) -> bool:
+    def _send_device_id_update_mqtt(self, factory: str, cell: str, new_device_id: str) -> bool:
         """Envia mensagem MQTT de atualização do device_id para o ESP32
+        
+        IMPORTANTE: A mensagem é enviada para o device_id ANTIGO (atual na config),
+        pois o ESP32 ainda está inscrito nesse tópico. O novo device_id é enviado
+        dentro da mensagem para que o ESP32 se reconfigure.
         
         Returns:
             bool: True se a mensagem foi enviada com sucesso, False caso contrário
         """
-        logger.info(f"[MQTT_SEND] Iniciando envio de atualização de device_id: {device_id}")
+        # Obter o device_id ATUAL (antigo) da configuração - é para ele que devemos enviar
+        config = load_config()
+        device_config = config.get("device", {})
+        current_factory = device_config.get("factory", "").strip()
+        current_cell = device_config.get("cell_number", "").strip()
+        old_device_id = f"cost-{current_factory}-{current_cell}"
+        
+        logger.info(f"[MQTT_SEND] Iniciando envio de atualização de device_id")
+        logger.info(f"[MQTT_SEND] Device ID ANTIGO (destino): {old_device_id}")
+        logger.info(f"[MQTT_SEND] Device ID NOVO (na mensagem): {new_device_id}")
         logger.debug(f"[MQTT_SEND] Parâmetros - Factory: {factory}, Cell: {cell}")
         
         try:
@@ -1120,12 +1133,13 @@ class EditTaktDialog(QDialog):
             from datetime import datetime
 
             # Cria a mensagem seguindo o padrão de device_config
+            # O novo device_id vai DENTRO da mensagem para o ESP32 se reconfigurar
             message = {
                 "event": "device_config",
                 "message": "update_device_id",
                 "factory": factory,
                 "cell_number": cell,
-                "device_id": device_id
+                "device_id": new_device_id  # Novo ID para o ESP32 usar
             }
             logger.debug(f"[MQTT_SEND] Mensagem preparada: {message}")
 
@@ -1191,16 +1205,16 @@ class EditTaktDialog(QDialog):
                 )
                 return False
             
-            logger.info(f"[MQTT_SEND] ✅ MQTT conectado. Enviando comando para device_id: {device_id}")
+            logger.info(f"[MQTT_SEND] ✅ MQTT conectado. Enviando comando para device_id ANTIGO: {old_device_id}")
             
-            # Tentar enviar o comando
-            success = mqtt_manager.publish_command(device_id, message)
+            # Tentar enviar o comando para o device_id ANTIGO (onde o ESP32 está inscrito)
+            success = mqtt_manager.publish_command(old_device_id, message)
 
             if success:
-                logger.info(f"[MQTT_SEND] ✅ SUCESSO: Mensagem MQTT enviada para {device_id}")
+                logger.info(f"[MQTT_SEND] ✅ SUCESSO: Mensagem MQTT enviada para {old_device_id} (ESP32 receberá novo ID: {new_device_id})")
                 return True
             else:
-                logger.error(f"[MQTT_SEND] ❌ FALHA: publish_command retornou False para {device_id}")
+                logger.error(f"[MQTT_SEND] ❌ FALHA: publish_command retornou False para {old_device_id}")
                 QMessageBox.warning(
                     self,
                     "Erro ao Enviar",
