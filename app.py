@@ -310,6 +310,30 @@ class ConfigDialog(QDialog):
         model_label.setStyleSheet(label_style)
         tech_layout.addRow(model_label, self.model_path_input)
 
+        self.tech_factory_input = QLineEdit()
+        self.tech_factory_input.setPlaceholderText("Ex: 2")
+        self.tech_factory_input.setStyleSheet(input_style)
+        self.tech_factory_input.setReadOnly(True)  # Bloqueado por padrão
+        tech_factory_label = QLabel("Fábrica do App:")
+        tech_factory_label.setStyleSheet(label_style)
+        tech_layout.addRow(tech_factory_label, self.tech_factory_input)
+
+        self.tech_cell_input = QLineEdit()
+        self.tech_cell_input.setPlaceholderText("Ex: 2408")
+        self.tech_cell_input.setStyleSheet(input_style)
+        self.tech_cell_input.setReadOnly(True)  # Bloqueado por padrão
+        tech_cell_label = QLabel("Célula do App:")
+        tech_cell_label.setStyleSheet(label_style)
+        tech_layout.addRow(tech_cell_label, self.tech_cell_input)
+
+        tech_info_label = QLabel(
+            "Esses campos atualizam apenas a configuração local do app. "
+            "Nenhum comando MQTT será enviado ao dispositivo IoT."
+        )
+        tech_info_label.setWordWrap(True)
+        tech_info_label.setStyleSheet("color: #7f8c8d; font-style: italic;")
+        tech_layout.addRow("", tech_info_label)
+
         tech_group.setLayout(tech_layout)
 
         # Layout vertical para agrupar o header e o grupo
@@ -376,6 +400,8 @@ class ConfigDialog(QDialog):
             self.mqtt_user_input.setReadOnly(True)
             self.mqtt_pass_input.setReadOnly(True)
             self.model_path_input.setReadOnly(True)
+            self.tech_factory_input.setReadOnly(True)
+            self.tech_cell_input.setReadOnly(True)
             self.lock_button.setText("🔒")
             self.lock_button.setStyleSheet(
                 """
@@ -420,6 +446,8 @@ class ConfigDialog(QDialog):
             self.mqtt_user_input.setReadOnly(False)
             self.mqtt_pass_input.setReadOnly(False)
             self.model_path_input.setReadOnly(False)
+            self.tech_factory_input.setReadOnly(False)
+            self.tech_cell_input.setReadOnly(False)
             self.lock_button.setText("🔓")
             self.lock_button.setStyleSheet(
                 """
@@ -454,9 +482,9 @@ class ConfigDialog(QDialog):
 
         # Dispositivo
         device = cfg.get("device", {})
-        # self.cell_input.setText(device.get("cell_number", ""))
-        # self.factory_input.setText(device.get("factory", ""))
         self.leader_input.setText(device.get("cell_leader", ""))
+        self.tech_cell_input.setText(device.get("cell_number", ""))
+        self.tech_factory_input.setText(device.get("factory", ""))
 
         # Rede
         # network = cfg.get("network", {})
@@ -474,9 +502,9 @@ class ConfigDialog(QDialog):
         """Valida e salva a configuração"""
         logger.debug("Tentando salvar configuração...")
         # Dispositivo
-        # cell = self.cell_input.text().strip()
-        # factory = self.factory_input.text().strip()
         leader = self.leader_input.text().strip()
+        cell = self.tech_cell_input.text().strip()
+        factory = self.tech_factory_input.text().strip()
 
         # Rede
         # wifi_ssid = self.wifi_ssid_input.text().strip()
@@ -495,22 +523,25 @@ class ConfigDialog(QDialog):
         #     f"WiFi SSID: {wifi_ssid}, mqtt Host: {mqtt_host}, Model: {model_path}"
         # )
 
-        # Validação básica - apenas campos do dispositivo são obrigatórios
-        # if not cell or not factory or not leader:
-        #     logger.warning("Validação falhou: campos obrigatórios vazios")
-        #     QMessageBox.warning(
-        #         self,
-        #         "Campos Obrigatórios",
-        #         "Por favor, preencha todos os campos do Dispositivo antes de salvar.",
-        #     )
-        #     return
+        if not cell or not factory:
+            logger.warning("Validação falhou: fábrica ou célula vazias")
+            QMessageBox.warning(
+                self,
+                "Campos Obrigatórios",
+                "Preencha Fábrica do App e Célula do App nas configurações técnicas antes de salvar.",
+            )
+            return
 
         # Salvar configuração estruturada
         config = load_config()
         device_data = config.get("device", {})
         wifi_data = config.get("network", {})
         data = {
-            "device": {"cell_number": device_data.get("cell_number", ""), "factory": device_data.get("factory", ""), "cell_leader": leader},
+            "device": {
+                "cell_number": cell,
+                "factory": factory,
+                "cell_leader": leader,
+            },
             "network": {"wifi_ssid": wifi_data.get("wifi_ssid",""), "wifi_pass": wifi_data.get("wifi_pass", "")},
             "tech": {
                 "mqtt_host": mqtt_host,
@@ -537,8 +568,8 @@ class ConfigDialog(QDialog):
         """Retorna a configuração atual dos campos"""
         return {
             "device": {
-                "cell_number": self.cell_input.text().strip(),
-                "factory": self.factory_input.text().strip(),
+                "cell_number": self.tech_cell_input.text().strip(),
+                "factory": self.tech_factory_input.text().strip(),
                 "cell_leader": self.leader_input.text().strip(),
             },
             "network": {
@@ -1745,39 +1776,60 @@ class MainWindow(QWidget):
     def _send_takt_edit_stage_mqtt(self, takt_count: int):
         """Envia mensagem MQTT de edição do estágio do takt para o ESP32"""
         try:
-            import json
             from datetime import datetime
 
-            # Obtém o device_id da configuração
-            cfg = load_config()
-            device = cfg.get("device", {})
-            cell_number = device.get("cell_number", "").strip()
-            factory = device.get("factory", "").strip()
+            # Normaliza para inteiro para evitar JSON com takt_count string.
+            takt_count_int = int(takt_count)
 
-            factory_num = factory
-            cell_num = cell_number
-            device_id = f"cost-{factory_num}-{cell_num}"
-
-            # Cria a mensagem
-            message = {
+            # Mensagem de configuração manual (formato original documentado)
+            message_config = {
                 "event": "device_config",
                 "message": "update_config",
-                "takt_count": takt_count
+                "takt_count": takt_count_int,
+                "taktCount": takt_count_int,
             }
 
             # Verifica se há worker thread rodando com conexão MQTT
             if self._worker_thread and self._worker_thread.isRunning():
                 mqtt_manager = getattr(self._worker_thread, "_mqtt_manager", None)
                 if mqtt_manager and mqtt_manager._connected:
+                    # Prioriza o device_id ativo do MQTTManager para evitar divergência
+                    # entre configuração salva e dispositivo realmente conectado em runtime.
+                    device_id = mqtt_manager.get_primary_device_id()
+                    if not device_id:
+                        cfg = load_config()
+                        device = cfg.get("device", {})
+                        cell_number = device.get("cell_number", "").strip()
+                        factory = device.get("factory", "").strip()
+                        device_id = f"cost-{factory}-{cell_number}"
+
                     logger.info(
-                        f"Enviando reset do takt via MQTT para {device_id}: {message}"
+                        f"Enviando alteração do takt via MQTT para {device_id}: {message_config}"
                     )
 
-                    # Usa publish_command do MQTTManager
-                    success = mqtt_manager.publish_command(device_id, message)
+                    # Publish principal: formato device_config.
+                    success_config = mqtt_manager.publish_command(device_id, message_config)
+
+                    # Publish de compatibilidade: mesmo formato dos eventos automáticos.
+                    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    message_takt = {
+                        "event": "takt",
+                        "message": "Takt detectado",
+                        "id": device_id,
+                        "device_id": device_id,
+                        "timestamp": timestamp,
+                        "takt_count": takt_count_int,
+                        "taktCount": takt_count_int,
+                        "manual_update": True,
+                    }
+                    success_takt = mqtt_manager.publish_command(device_id, message_takt)
+
+                    success = success_config or success_takt
 
                     if success:
-                        logger.info("Mensagem MQTT de reset enviada com sucesso")
+                        logger.info(
+                            f"Mensagem MQTT de alteração enviada (device_config={success_config}, takt={success_takt})"
+                        )
                     else:
                         logger.warning("Falha ao enviar mensagem MQTT de reset")
                         QMessageBox.warning(
