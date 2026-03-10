@@ -1,0 +1,3 @@
+sudo chown -R dass:dass /opt/dass_apps/takttime-process-tracker
+sudo find /opt/dass_apps/takttime-process-tracker -type d -exec chmod u+rwx {} +
+sudo find /opt/dass_apps/takttime-process-tracker -type f -exec chmod u+rw {} +
