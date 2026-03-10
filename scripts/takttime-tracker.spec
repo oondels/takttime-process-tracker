@@ -7,7 +7,7 @@ block_cipher = None
 # Coleta metadados dos pacotes que precisam (com tratamento de erro)
 datas_metadata = []
 packages_with_metadata = [
-    'aio_pika',
+    'aio-pika',
     'aiormq', 
     'pamqp',
     'ultralytics',

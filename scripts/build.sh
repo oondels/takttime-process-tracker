@@ -8,19 +8,61 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 # Muda para o diretório raiz do projeto
 cd "$PROJECT_ROOT"
 
+# Escolhe interpretador Python de forma determinística
+if [ -n "${PYTHON_BIN:-}" ] && [ -x "${PYTHON_BIN}" ]; then
+    PYTHON_EXEC="${PYTHON_BIN}"
+elif [ -n "${VIRTUAL_ENV:-}" ] && [ -x "${VIRTUAL_ENV}/bin/python" ]; then
+    PYTHON_EXEC="${VIRTUAL_ENV}/bin/python"
+elif [ -x "${PROJECT_ROOT}/.venv/bin/python" ]; then
+    PYTHON_EXEC="${PROJECT_ROOT}/.venv/bin/python"
+elif command -v python3 &> /dev/null; then
+    PYTHON_EXEC="$(command -v python3)"
+elif command -v python &> /dev/null; then
+    PYTHON_EXEC="$(command -v python)"
+else
+    echo "❌ Python não encontrado no sistema!"
+    exit 1
+fi
+
 echo "============================================"
 echo "  Takt-Time Process Tracker - Build Script"
 echo "============================================"
 echo ""
 echo "📂 Diretório do projeto: $PROJECT_ROOT"
+echo "🐍 Python selecionado: $PYTHON_EXEC"
 echo ""
 
-# Verifica se PyInstaller está instalado
-if ! command -v pyinstaller &> /dev/null
-then
+# Evita criar artefatos com dono root sem necessidade
+if [ "$EUID" -eq 0 ] && [ "${ALLOW_ROOT_BUILD:-0}" != "1" ]; then
+    echo "❌ Não execute este build com sudo/root."
+    echo "   Isso pode quebrar permissões de build/ e dist/."
+    echo "   Rode novamente como usuário normal:"
+    echo "   ./build.sh"
+    echo ""
+    echo "   Se precisar forçar root, use:"
+    echo "   ALLOW_ROOT_BUILD=1 ./build.sh"
+    exit 1
+fi
+
+# Verifica se diretórios de artefatos estão graváveis pelo usuário atual
+check_artifact_permissions() {
+    local target="$1"
+    [ -e "$target" ] || return 0
+
+    if [ ! -w "$target" ] || find "$target" ! -writable -print -quit | grep -q .; then
+        echo "❌ Sem permissão para alterar/remover: $target"
+        echo "   Corrija o dono/permissões e rode novamente sem sudo:"
+        echo "   sudo chown -R $(id -un):$(id -gn) \"$PROJECT_ROOT/$target\""
+        return 1
+    fi
+    return 0
+}
+
+# Verifica se PyInstaller está instalado no Python selecionado
+if ! "$PYTHON_EXEC" -m PyInstaller --version &> /dev/null; then
     echo "❌ PyInstaller não encontrado!"
-    echo "📦 Instalando PyInstaller..."
-    pip install pyinstaller
+    echo "📦 Instalando PyInstaller no ambiente de build..."
+    "$PYTHON_EXEC" -m pip install pyinstaller
     if [ $? -ne 0 ]; then
         echo "❌ Erro ao instalar PyInstaller"
         exit 1
@@ -29,8 +71,50 @@ then
     echo ""
 fi
 
+# Verifica dependências Python essenciais no mesmo interpretador do build
+missing_modules="$(
+"$PYTHON_EXEC" -c "
+import importlib.util
+modules = [
+    'PyQt5',
+    'paho.mqtt.client',
+    'cv2',
+    'pytesseract',
+    'numpy',
+    'torch',
+    'torchvision',
+    'aio_pika',
+    'aiormq',
+    'pamqp',
+    'yarl',
+    'multidict',
+    'ultralytics',
+    'dotenv',
+]
+missing = [m for m in modules if importlib.util.find_spec(m) is None]
+print('\n'.join(missing))
+"
+)"
+
+if [ -n "$missing_modules" ]; then
+    echo "❌ Dependências ausentes no Python selecionado:"
+    while IFS= read -r module_name; do
+        if [ -n "$module_name" ]; then
+            echo "   - $module_name"
+        fi
+    done <<< "$missing_modules"
+    echo ""
+    echo "Instale no mesmo ambiente do build:"
+    echo "   $PYTHON_EXEC -m pip install -r requirements.txt"
+    echo ""
+    echo "Dica: execute sem sudo ou use a .venv do projeto para evitar misturar ambientes."
+    exit 1
+fi
+
 # Limpa builds anteriores
 echo "🧹 Limpando builds anteriores..."
+check_artifact_permissions "build" || exit 1
+check_artifact_permissions "dist" || exit 1
 rm -rf build/ dist/
 
 # Verifica se o modelo existe
@@ -49,7 +133,7 @@ fi
 # Executa PyInstaller
 echo ""
 echo "🔨 Compilando aplicativo..."
-pyinstaller scripts/takttime-tracker.spec --clean
+"$PYTHON_EXEC" -m PyInstaller scripts/takttime-tracker.spec --clean
 
 # Verifica se a compilação foi bem-sucedida
 if [ $? -eq 0 ]; then
@@ -126,9 +210,17 @@ EOF
     
     # Copia o ícone para o diretório de distribuição
     echo "Copiando ícone..."
-    cp assets/icon.png dist/takttime-tracker/
+    if [ -f "assets/icon.png" ]; then
+        cp assets/icon.png dist/takttime-tracker/
+    else
+        echo "⚠️  Ícone assets/icon.png não encontrado."
+    fi
     echo "Copiando modelo YOLO..."
-    cp assets/train_2025.pt dist/takttime-tracker/
+    if [ -f "assets/train_2025.pt" ]; then
+        cp assets/train_2025.pt dist/takttime-tracker/
+    else
+        echo "⚠️  Modelo assets/train_2025.pt não encontrado."
+    fi
     
     # Cria arquivo .desktop para integração com o Linux
     cat > dist/takttime-tracker/takttime-tracker.desktop << 'EOF'
@@ -153,7 +245,16 @@ EOF
     echo "   4. Rode chmod +x ~/.local/share/applications/takttime-tracker.desktop"
     echo "   5. Copie o arquivo train_2025.pt para o mesmo diretório do executável"
     echo ""
-    cp dist/takttime-tracker/takttime-tracker.desktop ~/.local/share/applications/
+
+    DESKTOP_HOME="$HOME"
+    if [ "$EUID" -eq 0 ] && [ -n "${SUDO_USER:-}" ] && [ "${SUDO_USER}" != "root" ]; then
+        DESKTOP_HOME="$(getent passwd "$SUDO_USER" | cut -d: -f6)"
+    fi
+
+    DESKTOP_APPS_DIR="$DESKTOP_HOME/.local/share/applications"
+    mkdir -p "$DESKTOP_APPS_DIR"
+    cp dist/takttime-tracker/takttime-tracker.desktop "$DESKTOP_APPS_DIR/"
+    echo "Arquivo .desktop copiado para: $DESKTOP_APPS_DIR/"
 else
     echo ""
     echo "============================================"
