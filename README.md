@@ -439,26 +439,38 @@ pio device monitor
 
 ## Configuração
 
-### Arquivo `config/config.json`
+### Arquivo local `config/config.json`
+
+Use `config/config.example.json` como base e mantenha `config/config.json` apenas na máquina local:
 
 ```json
 {
     "device": {
-        "cell_number": "2408",
-        "factory": "2",
+        "cell_number": "0000",
+        "factory": "00",
         "cell_leader": "Nome do lider"
     },
     "network": {
         "wifi_ssid": "WIFI_NAME",
-        "wifi_pass": "********"
+        "wifi_pass": "WIFI_PASSWORD"
     },
     "tech": {
         "mqtt_host": "broker-host-or-ip",
         "mqtt_user": "mqtt-user",
-        "mqtt_pass": "********",
-        "model_path": "./train_2025.pt"
+        "mqtt_pass": "mqtt-password",
+        "model_path": "./assets/train_2025.pt"
     }
 }
+```
+
+### Variáveis de ambiente locais
+
+Você pode definir credenciais sensíveis em `.env` local com base em `.env.example`:
+
+```env
+AMQP_URL=amqp://user:password@broker-host/
+TECH_CONFIG_USER=admin
+TECH_CONFIG_PASS=change-me-before-use
 ```
 
 ### Interface de Configuração
@@ -467,8 +479,8 @@ pio device monitor
 2. **Configurações Básicas**: 
    - Líder da Célula (editável diretamente)
 3. **Configurações Técnicas**: Requer autenticação
-   - Usuário: `admin`
-   - Senha: `change-me-before-use`
+   - Usuário: variável `TECH_CONFIG_USER` (padrão `admin`)
+   - Senha: variável `TECH_CONFIG_PASS`
    - MQTT Host, Usuário, Senha
    - Caminho do modelo YOLO
 
@@ -481,7 +493,7 @@ Para alterar a identificação do dispositivo Takt (célula e fábrica):
 1. **Abrir**: Botão **"Editar Takt"** na interface principal
 2. **Seção**: "Conexão Takt Receptor"
 3. **Editar**: Campos de Fábrica e Célula
-4. **Autenticar**: Credenciais técnicas (admin/change-me-before-use)
+4. **Autenticar**: Credenciais técnicas definidas localmente via ambiente
 5. **Aplicar**: Botão **"🔗 Atualiza conexao disp. Takt"**
 6. **Resultado**: ESP32 reconfigura automaticamente + config local atualizado
 
@@ -490,9 +502,9 @@ Para alterar a identificação do dispositivo Takt (célula e fábrica):
 Editar `src/main.cpp`:
 
 ```cpp
-const char *DEVICE_ID = "cost-2-2408";
+const char *DEVICE_ID = "cost-00-0000";
 const char *SSID = "WIFI_NAME";
-const char *PASSWORD = "sua_senha";
+const char *PASSWORD = "WIFI_PASSWORD";
 const char *MQTT_SERVER = "broker-host-or-ip";
 ```
 
@@ -516,8 +528,8 @@ A aplicação permite atualizar remotamente o ID do dispositivo ESP32 através d
    - Exibe o **Device ID atual** (formato: `cost-{factory}-{cell}`)
    - Campos editáveis para **Fábrica** e **Célula**
 3. **Autenticação Requerida**:
-   - Usuário: `admin`
-   - Senha: `change-me-before-use`
+   - Usuário: variável `TECH_CONFIG_USER`
+   - Senha: variável `TECH_CONFIG_PASS`
 4. **Confirmação**: Preview do novo device_id antes de aplicar
 5. **Envio Automático**:
    - Comando MQTT enviado para o ESP32 **antes** de salvar localmente
@@ -649,7 +661,7 @@ Verificar device_status[ESP32_ID]
 ### ESP32 não conecta
 
 1. Verificar credenciais WiFi
-2. Testar conectividade: `ping broker-host-or-ip`
+2. Testar conectividade com o broker configurado: `ping <broker-host>`
 3. Monitor serial: `pio device monitor`
 4. Verificar se heartbeat está sendo enviado (a cada 30s)
 5. Checar Last Will Testament (LWT) no broker
@@ -869,7 +881,7 @@ python main.py
 
 **Segurança**
 
-- `config/config.json` contém credenciais (`mqtt_user`, `mqtt_pass`). Em ambientes reais, remova credenciais do repositório e utilize variáveis de ambiente ou serviços de segredo.
+- `config/config.example.json` e `.env.example` são apenas modelos. Não versione `config/config.json` nem `.env` com credenciais reais.
 - A comunicação MQTT no projeto atual não usa TLS por padrão — considere habilitar TLS/SSL no broker em ambientes sensíveis.
 
 **Testes**

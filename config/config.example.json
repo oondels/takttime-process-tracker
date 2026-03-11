@@ -1,0 +1,17 @@
+{
+  "device": {
+    "cell_number": "0000",
+    "factory": "00",
+    "cell_leader": "Nome do lider"
+  },
+  "network": {
+    "wifi_ssid": "WIFI_NAME",
+    "wifi_pass": "WIFI_PASSWORD"
+  },
+  "tech": {
+    "mqtt_host": "broker-host-or-ip",
+    "mqtt_user": "mqtt-user",
+    "mqtt_pass": "mqtt-password",
+    "model_path": "./assets/train_2025.pt"
+  }
+}

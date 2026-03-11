@@ -388,8 +388,8 @@ Após instalação:
    - Líder da Célula
 4. Configure WiFi (opcional)
 5. Configurações técnicas (desbloqueio):
-   - Usuário: admin
-   - Senha: change-me-before-use
+   - Usuário: TECH_CONFIG_USER (padrão: admin)
+   - Senha: TECH_CONFIG_PASS
 
 
 📁 ESTRUTURA DE ARQUIVOS

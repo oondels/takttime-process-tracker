@@ -180,8 +180,8 @@ CONFIGURAÇÃO:
    - Líder da Célula
 4. Configure a rede WiFi (opcional)
 5. Desbloqueie e configure dados técnicos (opcional):
-   - Usuário: admin
-   - Senha: change-me-before-use
+   - Usuário: TECH_CONFIG_USER (padrão: admin)
+   - Senha: TECH_CONFIG_PASS
 
 
 LOGS:

@@ -47,8 +47,20 @@ CONFIG_PATH = os.path.join(CONFIG_DIR, "config.json")
 logger.debug(f"CONFIG_DIR: {CONFIG_DIR}, CONFIG_PATH: {CONFIG_PATH}")
 
 # Credenciais para desbloquear configurações técnicas
-TECH_CONFIG_USER = "admin"
-TECH_CONFIG_PASS = "change-me-before-use"
+TECH_CONFIG_USER = os.getenv("TECH_CONFIG_USER", "admin")
+TECH_CONFIG_PASS = os.getenv("TECH_CONFIG_PASS", "change-me-before-use")
+
+
+def _redact_sensitive_config(data: dict) -> dict:
+    redacted = json.loads(json.dumps(data))
+    for section, key in (
+        ("network", "wifi_pass"),
+        ("tech", "mqtt_pass"),
+    ):
+        value = redacted.get(section, {}).get(key)
+        if value:
+            redacted[section][key] = "***"
+    return redacted
 
 
 def ensure_config_dir():
@@ -111,7 +123,7 @@ def load_config():
 
 
 def save_config(data: dict):
-    logger.debug(f"Salvando configuração: {data}")
+    logger.debug(f"Salvando configuração: {_redact_sensitive_config(data)}")
     ensure_config_dir()
     try:
         with open(CONFIG_PATH, "w", encoding="utf-8") as f:
