@@ -235,6 +235,28 @@ Icon=/opt/dass_apps/takttime-process-tracker/dist/takttime-tracker/icon.png
 Terminal=false
 Categories=Utility;Development;
 EOF
+
+echo "Configurando diretórios e arquivos de configuração..."
+    
+    # Criar pastas essenciais no build final
+    mkdir -p dist/takttime-tracker/config
+    mkdir -p dist/takttime-tracker/logs
+    
+    # Copiar arquivo de configuração base (como exemplo ou arquivo pronto para uso)
+    if [ -f "config/config.example.json" ]; then
+        cp config/config.example.json dist/takttime-tracker/config/config.json
+        echo "✅ config.json adicionado à distribuição"
+    else
+        echo "⚠️ config.example.json não encontrado"
+    fi
+    
+    # Copiar arquivo de variáveis de ambiente base
+    if [ -f ".env.example" ]; then
+        cp .env.example dist/takttime-tracker/.env
+        echo "✅ .env adicionado à distribuição"
+    else
+        echo "⚠️ .env.example não encontrado"
+    fi
     
     echo "Ícone e arquivo .desktop criados"
     echo ""
