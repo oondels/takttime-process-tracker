@@ -160,9 +160,10 @@ PRÉ-REQUISITOS:
 1. Tesseract OCR instalado no sistema
    Ubuntu/Debian: sudo apt install tesseract-ocr
    
-2. Modelo YOLO (train_2025.pt) no mesmo diretório
+2. Modelo YOLO em assets/train_2025.pt
 
 3. Arquivo config/config.json com as configurações
+4. Arquivo .env ao lado do executável para credenciais locais
 
 
 COMO EXECUTAR:
@@ -216,8 +217,9 @@ EOF
         echo "⚠️  Ícone assets/icon.png não encontrado."
     fi
     echo "Copiando modelo YOLO..."
+    mkdir -p dist/takttime-tracker/assets
     if [ -f "assets/train_2025.pt" ]; then
-        cp assets/train_2025.pt dist/takttime-tracker/
+        cp assets/train_2025.pt dist/takttime-tracker/assets/
     else
         echo "⚠️  Modelo assets/train_2025.pt não encontrado."
     fi
@@ -242,20 +244,26 @@ echo "Configurando diretórios e arquivos de configuração..."
     mkdir -p dist/takttime-tracker/config
     mkdir -p dist/takttime-tracker/logs
     
-    # Copiar arquivo de configuração base (como exemplo ou arquivo pronto para uso)
-    if [ -f "config/config.example.json" ]; then
+    # Copiar arquivo real de configuração quando existir; senão, usar o exemplo.
+    if [ -f "config/config.json" ]; then
+        cp config/config.json dist/takttime-tracker/config/config.json
+        echo "✅ config.json local adicionado à distribuição"
+    elif [ -f "config/config.example.json" ]; then
         cp config/config.example.json dist/takttime-tracker/config/config.json
-        echo "✅ config.json adicionado à distribuição"
+        echo "✅ config.example.json copiado como config.json na distribuição"
     else
-        echo "⚠️ config.example.json não encontrado"
+        echo "⚠️ config/config.json e config/config.example.json não encontrados"
     fi
     
-    # Copiar arquivo de variáveis de ambiente base
-    if [ -f ".env.example" ]; then
+    # Copiar arquivo real de ambiente quando existir; senão, usar o exemplo.
+    if [ -f ".env" ]; then
+        cp .env dist/takttime-tracker/.env
+        echo "✅ .env local adicionado à distribuição"
+    elif [ -f ".env.example" ]; then
         cp .env.example dist/takttime-tracker/.env
-        echo "✅ .env adicionado à distribuição"
+        echo "✅ .env.example copiado como .env na distribuição"
     else
-        echo "⚠️ .env.example não encontrado"
+        echo "⚠️ .env e .env.example não encontrados"
     fi
     
     echo "Ícone e arquivo .desktop criados"
@@ -265,7 +273,7 @@ echo "Configurando diretórios e arquivos de configuração..."
     echo "   2. Edite o campo Exec= com o caminho absoluto do executável (se necessário)"
     echo "   3. Edite o campo Icon= com o caminho absoluto do ícone (se necessário)"
     echo "   4. Rode chmod +x ~/.local/share/applications/takttime-tracker.desktop"
-    echo "   5. Copie o arquivo train_2025.pt para o mesmo diretório do executável"
+    echo "   5. Verifique se assets/train_2025.pt existe dentro da distribuição"
     echo ""
 
     DESKTOP_HOME="$HOME"

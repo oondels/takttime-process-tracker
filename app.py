@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import sys
 from PyQt5.QtWidgets import (
     QApplication,
     QWidget,
@@ -23,12 +24,23 @@ import importlib
 import time
 from typing import Callable
 import re
+from dotenv import load_dotenv
 
 from mqtt_manager import MQTTManager
 
 
+def get_runtime_base_dir() -> str:
+    """Retorna a raiz usada para config/logs tanto no código-fonte quanto no binário."""
+    if getattr(sys, "frozen", False):
+        return os.path.dirname(sys.executable)
+    return os.path.dirname(os.path.abspath(__file__))
+
+
+BASE_DIR = get_runtime_base_dir()
+load_dotenv(os.path.join(BASE_DIR, ".env"))
+
 # Garantir que a pasta de logs existe
-LOGS_DIR = os.path.join(os.path.dirname(__file__), "logs")
+LOGS_DIR = os.path.join(BASE_DIR, "logs")
 os.makedirs(LOGS_DIR, exist_ok=True)
 
 # Configuração de logging detalhado
@@ -42,13 +54,28 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-CONFIG_DIR = os.path.join(os.path.dirname(__file__), "config")
+CONFIG_DIR = os.path.join(BASE_DIR, "config")
 CONFIG_PATH = os.path.join(CONFIG_DIR, "config.json")
 logger.debug(f"CONFIG_DIR: {CONFIG_DIR}, CONFIG_PATH: {CONFIG_PATH}")
 
 # Credenciais para desbloquear configurações técnicas
 TECH_CONFIG_USER = os.getenv("TECH_CONFIG_USER", "admin")
 TECH_CONFIG_PASS = os.getenv("TECH_CONFIG_PASS", "change-me-before-use")
+
+
+def apply_env_overrides(config: dict) -> dict:
+    """Aplica overrides do .env sobre a configuração carregada."""
+    tech = config.setdefault("tech", {})
+    env_mapping = {
+        "mqtt_host": os.getenv("MQTT_HOST"),
+        "mqtt_user": os.getenv("MQTT_USER"),
+        "mqtt_pass": os.getenv("MQTT_PASS"),
+        "model_path": os.getenv("MODEL_PATH"),
+    }
+    for key, env_value in env_mapping.items():
+        if env_value:
+            tech[key] = env_value
+    return config
 
 
 def _redact_sensitive_config(data: dict) -> dict:
@@ -75,16 +102,16 @@ def load_config():
         logger.warning(
             f"Arquivo de configuração não encontrado: {CONFIG_PATH}. Usando configuração padrão."
         )
-        return {
+        return apply_env_overrides({
             "device": {"cell_number": "", "factory": "", "cell_leader": ""},
             "network": {"wifi_ssid": "", "wifi_pass": ""},
             "tech": {
                 "mqtt_host": "",
                 "mqtt_user": "",
                 "mqtt_pass": "",
-                "model_path": "./train_2025.pt",
+                "model_path": "./assets/train_2025.pt",
             },
-        }
+        })
     try:
         with open(CONFIG_PATH, "r", encoding="utf-8") as f:
             config = json.load(f)
@@ -106,20 +133,20 @@ def load_config():
                     },
                 }
                 logger.debug(f"Configuração migrada: {migrated_config}")
-                return migrated_config
-            return config
+                return apply_env_overrides(migrated_config)
+            return apply_env_overrides(config)
     except Exception as e:
         logger.error(f"Erro ao carregar configuração: {e}", exc_info=True)
-        return {
+        return apply_env_overrides({
             "device": {"cell_number": "", "factory": "", "cell_leader": ""},
             "network": {"wifi_ssid": "", "wifi_pass": ""},
             "tech": {
                 "mqtt_host": "",
                 "mqtt_user": "",
                 "mqtt_pass": "",
-                "model_path": "./train_2025.pt",
+                "model_path": "./assets/train_2025.pt",
             },
-        }
+        })
 
 
 def save_config(data: dict):

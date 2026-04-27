@@ -26,7 +26,7 @@ a = Analysis(
     pathex=['..'],
     binaries=[],
     datas=[
-        ('../assets/train_2025.pt', '.'),  # Inclui o modelo YOLO
+        ('../assets/train_2025.pt', 'assets'),  # Inclui o modelo YOLO
         ('../config', 'config'),     # Inclui o diretório de configuração
     ] + datas_metadata,  # Adiciona os metadados coletados
     hiddenimports=[
